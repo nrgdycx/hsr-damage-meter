@@ -49,6 +49,13 @@ DATAS_REL = [
     "out/axis_top_bank_E.npz",     # 行动轴单位模板库（109 角色，共享库）
     "out/axis_top_bank_E2.npz",    # 行动轴单位模板库（录屏2 的 4 个单位）
     "out/axis_marker_bank_E.npz",  # 左侧标记模板库
+    # ⚠️ 2026-10-05 补：**阿哈时刻认脸**（T2）的模板库与标签。
+    #    缺了它们 → `aha_member` 读不到库 → 阿哈时刻判不出"框里是谁" →
+    #    status 只能停在 review → **阿哈时刻的伤害进不了合计**。
+    #    （用户实机反馈"阿哈时刻没反应"正是这个原因。）
+    "out/t2_aha_bank.npz",
+    "out/t2_aha_labels.json",
+    "out/t2_aha_timeline.json",
     # P1：实机帧 —— 让 exe 的 `--selftest` 能做**真实一帧的端到端读数断言**
     "out/real_frames/live_2880x1800_73431_q88.jpg",
 ]
