@@ -69,7 +69,8 @@ class Perceiver:
     """帧 → 读数。线程不安全（内部复用同一个模型实例），单线程用。"""
 
     def __init__(self, profile="default", backend="onnx", conf_min=0.55,
-                 check_fresh=True, actor_bank=None, span_guard=False):
+                 check_fresh=True, actor_bank=None, span_guard=False,
+                 retry_alt_profile=True, alt_profile="yinlang999"):
         self.profile = profile
         self.backend = backend
         self.conf_min = float(conf_min)
@@ -96,6 +97,11 @@ class Perceiver:
         else:
             raise ValueError("backend 只能是 onnx / torch，收到 %r" % backend)
         self.bank = actor_bank if actor_bank is not None else T.load_bank()
+        #: 像素字体兜底（见 read() 的说明）。
+        #: `_retry_alt`：常规档读出"全是 ?"时，是否再用另一套字体档试一次。
+        #: `_alt_profile`：要试的那一套（默认 `yinlang999` = 狼尊强普的像素字体）。
+        self._retry_alt = bool(retry_alt_profile)
+        self._alt_profile = alt_profile
 
     # ────────────────────────── HUD ──────────────────────────
     def _reader_for(self, profile):
@@ -201,6 +207,11 @@ class Perceiver:
         """
         import cv2
         bgr = cv2.cvtColor(np.ascontiguousarray(axis_rgb, dtype=np.uint8), cv2.COLOR_RGB2BGR)
+        # ⚠️ 2026-10-05：**不要在这里"用整帧算几何再平移"** ——
+        #    我试过，会在实机路径上引入 OpenCV 坏参数错误。
+        #    原设计就是"实时抓轴区域时必须由调用方传 `axis_geom`"
+        #    （`live_mvp` 在 `relocate()` 后给出，见那里的 `local_axis_geom`）。
+        #    没给 `geom` 时按原样交给 `axis_actor`（离线/整帧场景本来是正常的）。
         r = T.read_actor(bgr, self.bank, geom=geom)
         if r is None:
             return r
@@ -265,9 +276,20 @@ class Perceiver:
         row = new_row(t)
         t0 = time.perf_counter()
         suspect = ""
-        # ① **先读行动轴**（原来 HUD 在前）。
-        #    为什么调顺序：HUD 的**字体档案要按行动者选**（狼尊强普=像素字体，见 _reader_for）。
-        #    行动轴 ~1ms、HUD ~1ms，顺序调换不影响预算。
+        if region_rgb is not None:
+            text, conf, n, nbad, suspect = self.read_hud_region(region_rgb, top, left, bar_rows)
+            if want_lm and text:
+                row["lm"] = self.hud_leftmost(region_rgb, top, left)
+        elif frame_rgb is not None:
+            text, conf, n, nbad = self.read_hud_frame(frame_rgb)
+            if want_lm and text:
+                arr = np.asarray(frame_rgb, dtype=np.int16)
+                row["lm"] = self.hud_leftmost(arr[HG.CY0:HG.CY1, HG.CX0:HG.CX1],
+                                              HG.CY0, HG.CX0)
+        else:
+            raise ValueError("read() 需要 frame_rgb 或 region_rgb")
+        t1 = time.perf_counter()
+        row.update({"text": text, "n": n, "conf": round(conf, 3), "nbad": nbad})
         if read_axis and axis_rgb is not None:
             a = self.read_actor(axis_rgb, geom=axis_geom, offset=axis_offset, t=t)
             row.update({"unit": a["unit"] or "", "owner": a["owner"] or "",
@@ -277,26 +299,36 @@ class Perceiver:
                         "inserted": "" if a["inserted"] is None else str(int(a["inserted"])),
                         "card_type": a["card_type"] or "",
                         "raw_unit": a["raw"]})
-        t1 = time.perf_counter()
-        # ② 按行动者（含 T2 卡面细化）选字体档案 → 读 HUD
-        prof = self.profile_for(row)
-        row["profile"] = prof
-        if region_rgb is not None:
-            text, conf, n, nbad, suspect = self.read_hud_region(
-                region_rgb, top, left, bar_rows, profile=prof)
-            if want_lm and text:
-                row["lm"] = self.hud_leftmost(region_rgb, top, left)
-        elif frame_rgb is not None:
-            text, conf, n, nbad = self.read_hud_frame(frame_rgb, profile=prof)
-            if want_lm and text:
-                arr = np.asarray(frame_rgb, dtype=np.int16)
-                row["lm"] = self.hud_leftmost(arr[HG.CY0:HG.CY1, HG.CX0:HG.CX1],
-                                              HG.CY0, HG.CX0)
-        else:
-            raise ValueError("read() 需要 frame_rgb 或 region_rgb")
         t2 = time.perf_counter()
-        row.update({"text": text, "n": n, "conf": round(conf, 3), "nbad": nbad})
-        row["ms"] = {"hud": (t2 - t1) * 1000.0, "axis": (t1 - t0) * 1000.0}
+        # ③ **像素字体兜底**（2026-10-05）
+        #
+        # 背景：狼尊强普的 HUD 数字是**像素方块字体**（档案 `yinlang999`），
+        # 常规字体管线读它就是"切不出字形/全是 ?" —— 用户实机反馈"强普伤害没记录"。
+        #
+        # ⚠️ **为什么不按行动者选档**（我一开始是那么写的，**把实机搞崩了**）：
+        #    HUD 的字体档案要"先知道是谁"，但**行动轴几何要 HUD 先跑一遍**才有效
+        #    （实时第一帧 `axis_geom` 是 None，轴裁剪区被当成整帧 → 抛
+        #     "帧尺寸 (88,280) 太小"）。调顺序会引入崩溃。
+        # ⇒ 改成**与顺序无关**的做法：常规档读出的结果**明显坏**时，
+        #    再用像素字体档重读一次；只有像素档给出干净读数才采用。
+        #    代价 = 只在坏帧上多一次字形分类；好处 = **不碰原有的时间顺序**。
+        if (self._retry_alt and text and set(text) <= {"?"}) or (
+                self._retry_alt and not text and nbad == 0):
+            alt = self._alt_profile
+            if alt and alt != "default":
+                try:
+                    if region_rgb is not None:
+                        t2s, c2, n2, b2, _ = self.read_hud_region(
+                            region_rgb, top, left, bar_rows, profile=alt)
+                    else:
+                        t2s, c2, n2, b2 = self.read_hud_frame(frame_rgb, profile=alt)
+                    # 只有"切出了字形 且 没有坏字形"才采信（宁可漏，不要错）
+                    if t2s and "?" not in t2s and b2 == 0 and n2 > 0:
+                        row.update({"text": t2s, "n": n2, "conf": round(c2, 3),
+                                    "nbad": b2, "profile": alt, "profile_src": "fallback"})
+                except Exception as e:                      # noqa: BLE001
+                    row["alt_err"] = str(e)[:80]
+        row["ms"] = {"hud": (t1 - t0) * 1000.0, "axis": (t2 - t1) * 1000.0}
         return row
 
     def profile_for(self, row):
