@@ -215,10 +215,18 @@ class Perceiver:
         r = T.read_actor(bgr, self.bank, geom=geom)
         if r is None:
             return r
-        # ① 卡面细化（盲盒 / 敌方 buff）——只对"可能误判"的帧做，省时间：
-        #    菱形卡（`elation`）里混着【?】盲盒；低分的单位卡里混着红兔（敌方 buff）。
+        # ① 卡面细化（盲盒 / 敌方 buff）
+        #
+        # ⚠️⚠️ 2026-10-05 修（用户实机反馈：「狼尊的盲盒怎么记到别人身上了」）：
+        #   原判据是 `ct0 == "elation" or (ct0 == "unit" and score < 0.90)`
+        #   —— 一个**为省时间而设的"可疑帧门"**。
+        #   但盲盒卡若被判成**正常单位卡且分数 ≥0.90**，这个 if 根本不进 →
+        #   盲盒就按"卡上是谁"归属 → **记到别人头上**。
+        #   实测 `card_kind_live` 只要 ~18ms，而行动轴是 `axis_every=5` 才读一次
+        #   → 匀到每帧约 3.6ms，**完全跑得起**：不该为省这点时间牺牲正确性。
+        #   ⇒ 改成**每次都判**（是否采纳由模板阈值 1.20 把关）。
         ct0 = r.get("card_type")
-        if ct0 == "elation" or (ct0 == "unit" and float(r.get("score") or 0) < 0.90):
+        if ct0 in (None, "", "unit", "elation"):
             try:
                 from tools.team2 import card_kind_t2 as CK
                 k = CK.card_kind_live(bgr, offset=offset, geom=geom)

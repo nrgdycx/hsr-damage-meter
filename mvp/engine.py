@@ -202,6 +202,7 @@ class LiveEngine:
             except Exception:                       # noqa: BLE001  附伤层坏了不影响主链路
                 ev["t2"] = None
             self.events.append(ev)
+            self._maybe_merge_tail()
             new_events.append(ev)
             self._last_final_t = last_t
             self._last_final_first_t = first_t
@@ -222,6 +223,66 @@ class LiveEngine:
         if self.trace is not None:            # 调试钩子（默认 None，不参与生产路径）
             self.trace(now, runs, new_events)
         return new_events
+
+    #: 「同一次攻击被切成多段」的合并窗口（秒）。
+    #: 用户 2026-10-05 反馈：「狼尊的强普是分阶段累计加的，你重复计数了，
+    #: 比如动画会显示 20->30->40，要记录的是 40 而不是 90」。
+    #: 强普/大招的伤害是**分阶段累加**的，读数一级一级往上跳（20→30→40）；
+    #: 这种**单调递增**如果中间被切了一刀，就变成多个事件、**逐段相加 = 重复计数**。
+    MERGE_GAP = 2.5          # 后一段起点距前一段终点多近才算"同一击"
+    MERGE_MIN_RATIO = 0.60   # 后一段最大值 ≥ 前一段 ×这个比例（递增/持平）
+    MERGE_FLOOR = 200_000    # 两段都 ≥ 这个量级才合并（防小额误并）
+
+    def _maybe_merge_tail(self):
+        """把"同一次攻击被切成多段"的尾部事件合并掉（见 `MERGE_GAP` 的说明）。
+
+        判据（全部满足才并）：
+          * `owner` 相同且非空
+          * 后一段起点 − 前一段终点 ≤ `MERGE_GAP`
+          * 两段的 `damage_max` 都 ≥ `MERGE_FLOOR`（量级够大，排除小额噪声）
+          * 后一段 ≥ 前一段 × `MERGE_MIN_RATIO`（**递增或基本持平** —— 正是"分阶段累加"）
+          * 前一段不是 `non_ally` / 敌方
+
+        合并语义：**保留后一段**（它的 `damage_max` 就是那次攻击的当前累计值，
+        也是我们唯一该记的数）；把前一段标 `merged_into` 后**从事件表移除**。
+        —— 这正是用户要的"记 40 而不是 20+30+40"。
+
+        ⚠️ 只在"值在涨"时并：**跌下去**（新一击从小数重新开始）正是原 reset 判据，
+        那种情况两段的比值会远低于 `MERGE_MIN_RATIO`，不会被并。
+        """
+        if len(self.events) < 2:
+            return
+        a = self.events[-2]
+        b = self.events[-1]
+        try:
+            if a.get("status") == "non_ally" or b.get("status") == "non_ally":
+                return
+            oa, ob = (a.get("owner") or ""), (b.get("owner") or "")
+            if not oa or oa != ob:
+                return
+            da = int(a.get("damage_max") or 0)
+            db = int(b.get("damage_max") or 0)
+            if da < self.MERGE_FLOOR or db < self.MERGE_FLOOR:
+                return
+            if db < da * self.MERGE_MIN_RATIO:
+                return
+            ta = float(a.get("t_last") or a.get("t_anchor") or 0.0)
+            tb = float(b.get("t_first") or b.get("t_anchor") or 0.0)
+            if tb - ta > self.MERGE_GAP:
+                return
+        except Exception:                                # noqa: BLE001
+            return
+        # 合并：保留 b（更大的那个值），a 标掉并移除
+        b["merged_from"] = (b.get("merged_from") or []) + [a.get("event")]
+        b["merged_n"] = int(b.get("merged_n") or 0) + 1 + int(a.get("merged_n") or 0)
+        b["t_first"] = min(float(a.get("t_first") or tb),
+                           float(b.get("t_first") or tb))
+        b["issues"] = ",".join(filter(None, [b.get("issues"),
+                                             "merged_accum"]))
+        self.events.pop(-2)
+        for i, e in enumerate(self.events, 1):           # 事件号重排
+            e["event"] = i
+        self.n_merged = getattr(self, "n_merged", 0) + 1
 
     # ────────────────────────── 汇总 ──────────────────────────
     def totals(self):
