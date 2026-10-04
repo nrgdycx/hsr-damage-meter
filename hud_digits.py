@@ -69,15 +69,39 @@ class HudOnnxReader:
         import onnxruntime as ort
 
         if profile and path == MODEL_ONNX:
+            # ⚠️ 2026-10-05：**不许静默退回** default 模型。
+            #
+            # 两个坑（都在 exe 里踩到过）：
+            #   ① `hud_profiles.model_path()` 检查的是档案的 `model` 字段（`.pt`），
+            #      而 exe 里**只打了 `.onnx`** → 它返回 None → 旧代码当"查不到"跳过了；
+            #   ② 于是拿常规字体的模型去读像素字体 —— 表面"加载成功"、实际读不出。
+            # ⇒ 档案的 `.onnx` 字段**优先**，其次才由 `.pt` 推同名 `.onnx`。
+            cand = None
             try:
                 import hud_profiles as _HP
-                cand = _HP.model_path(profile)
-                if cand.endswith((".pt", ".onnx")):
-                    cand = cand.rsplit(".", 1)[0] + ".onnx"
-                if os.path.exists(cand):
-                    path = cand
+                p = _HP.get(profile)
+                for key in ("onnx", "model"):
+                    v = p.get(key)
+                    if not v:
+                        continue
+                    if key == "model":
+                        v = (v[:-3] if v.endswith(".pt") else v) + ".onnx"
+                    if os.path.exists(v):
+                        cand = v
+                        break
+                if cand is None:
+                    # 都找不到：用 .onnx 字段做报错信息（更能说明"该打包哪个文件"）
+                    cand = p.get("onnx") or p.get("model")
             except Exception:
-                pass
+                cand = None
+            if cand:
+                path = cand
+            elif profile != "default":
+                raise FileNotFoundError(
+                    "字体档案 %r 的 ONNX 不存在（hud_profiles 登记为 %r）。\n"
+                    "打包时请把该文件加进 hud_pack.spec 的 DATAS_REL；"
+                    "或先训好该档案的分类器。"
+                    % (profile, profile))
         self.path = path
         so = ort.SessionOptions()
         so.intra_op_num_threads = threads

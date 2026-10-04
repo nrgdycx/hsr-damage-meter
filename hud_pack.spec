@@ -37,14 +37,28 @@ CONSOLE = os.environ.get("HSR_NOCONSOLE", "1") != "1"   # 默认无控制台（�
 # ── 运行时资源（与 mvp/resource.py 的 RESOURCES 一一对应）────────────────────
 # 缺任何一个都直接中止 —— 让它在**打包时**报错，而不是让用户双击后看到 Traceback。
 DATAS_REL = [
-    "out/digit_cnn.onnx",          # HUD 数字分类器
+    "out/digit_cnn.onnx",          # HUD 数字分类器（常规字体）
     "out/digit_cnn.onnx.data",     # ↑ 的外部权重（必须与 .onnx 同目录）
     "out/digit_cnn.probe.npz",     # ONNX/.pt 等价性探针（新鲜度检查用）
-    "out/axis_top_bank_E.npz",     # 行动轴单位模板库（录屏1 的 8 个单位）
-    "out/axis_top_bank_E2.npz",    # 行动轴单位模板库（录屏2 的 4 个单位，给 v2/线2 用）
+    # ⚠️ 2026-10-05 补：**像素字体**（狼尊强普）的分类器。
+    #    实时链路现在会按行动者切字体档案（`mvp/reader.py: profile_for`），
+    #    缺这两个文件时 `HudOnnxReader(profile='yinlang999')` 会**静默退回 default 模型**
+    #    → 自我感觉"加载成功"，实际用错模型，强普数字照样读不出。
+    "out/digit_cnn_yinlang999.onnx",
+    "out/digit_cnn_yinlang999.onnx.data",
+    "out/axis_top_bank_E.npz",     # 行动轴单位模板库（109 角色，共享库）
+    "out/axis_top_bank_E2.npz",    # 行动轴单位模板库（录屏2 的 4 个单位）
     "out/axis_marker_bank_E.npz",  # 左侧标记模板库
     # P1：实机帧 —— 让 exe 的 `--selftest` 能做**真实一帧的端到端读数断言**
     "out/real_frames/live_2880x1800_73431_q88.jpg",
+]
+
+# ── 运行时要 import 的**包目录**（PyInstaller 的静态分析看不到函数体内的 import）──
+# ⚠️ 2026-10-05 补：`mvp/reader.py` 在函数体里 `from tools.team2 import ...`
+#    （盲盒卡判定 / 阿哈认脸 / 附伤展示口径）。**不显式带上就整块功能缺失** ——
+#    用户实机反馈的"盲盒不记录"正是这个原因（exe 里根本没有 tools/team2）。
+DATAS_TREE = [
+    ("tools", "tools"),            # 整个 tools/ 包含 team2（T2 判定）与各诊断脚本
 ]
 
 datas = []
@@ -55,8 +69,22 @@ for _rel in DATAS_REL:
         _missing.append(_rel)
         continue
     datas.append((_src, os.path.dirname(_rel)))
+# 整目录带上（tools/team2 等"函数体内 import"的包）
+for _srcdir, _dst in DATAS_TREE:
+    _src = os.path.join(ROOT, _srcdir)
+    if not os.path.isdir(_src):
+        _missing.append(_srcdir + "/")
+        continue
+    for _dp, _dn, _fn in os.walk(_src):
+        _dn[:] = [d for d in _dn if d != "__pycache__"]
+        for _f in _fn:
+            if _f.endswith((".pyc",)):
+                continue
+            _full = os.path.join(_dp, _f)
+            _relsub = os.path.relpath(_dp, ROOT)
+            datas.append((_full, _relsub))
 if _missing:
-    raise SystemExit("打包中止：缺少运行时资源 %s（先按 docs/专项_EXE打包.md §8 重建产物）"
+    raise SystemExit("打包中止：缺少运行时资源 %s（先按 docs/EXE打包.md §8 重建产物）"
                      % (_missing,))
 
 # ── 隐式依赖：这些都在函数体/条件分支里 import，显式写出来更稳 ──────────────

@@ -820,11 +820,17 @@ def selftest():
     print("\n=== 模型 ===")
     p = Perceiver(backend="onnx")
     print("  ONNX 模型：%s" % R.resource("out/digit_cnn.onnx"))
-    print("  会话已建立，输入名 %r" % p._onnx.input)
+    # ⚠️ 2026-10-05：分类器改成**按字体档案取**（`_reader_for`），
+    #    不再有 `p._onnx` 这个单一实例（实时链路要按行动者切档案）。
+    rd = p._reader_for(p.profile)
+    print("  会话已建立，输入名 %r" % rd.input)
     glyph = (np.random.RandomState(0).rand(34, 24).astype(np.float32), 30, 70)
-    res = p._onnx.classify([glyph])
+    res = rd.classify([glyph])
     print("  推理跑通：随机字形 → digit=%d conf=%.3f（只证明能跑，不代表识别正确）"
           % (res[0][0], res[0][1]))
+    # 顺带确认第二套字体档案也能加载（狼尊强普用）
+    rd2 = p._reader_for("yinlang999")
+    print("  第二套字体档案 yinlang999：%s" % ("已加载 ✓" if rd2 is not None else "不可用"))
     print("  行动轴模板库：%d 个单位 %s" % (len(p.bank), sorted(p.bank)))
     import axis_actor as T
     print("  左侧标记模板库：%s" % (sorted(T._marker_bank()) or "(空)"))
