@@ -212,7 +212,39 @@ class Perceiver:
         #    原设计就是"实时抓轴区域时必须由调用方传 `axis_geom`"
         #    （`live_mvp` 在 `relocate()` 后给出，见那里的 `local_axis_geom`）。
         #    没给 `geom` 时按原样交给 `axis_actor`（离线/整帧场景本来是正常的）。
-        r = T.read_actor(bgr, self.bank, geom=geom)
+        #
+        # ⚠️⚠️ 2026-10-05（用户实机："一直出现之前那个闪退的报错…我一旦慢一点它就这样"）：
+        #    `axis_actor` / `geometry` 在"几何框比图还大"时会抛
+        #       ValueError: 帧尺寸 (88, 280) 太小，连顶端卡区域都放不下
+        #    这个异常**会把整个采集进程干掉**（用户看到的就是闪退）。
+        #    根因是时序：进战前/慢一点时，抓到的轴区域与手里的几何**不是一对**
+        #    （几何来自上一次整屏定位，而这一帧的裁剪区尺寸/偏移已经变了）。
+        #
+        #    ⇒ 这里**兜住它**：几何明显放不进这张图（或任何异常）就**当这一帧判不出来**，
+        #      返回 None（上层照常记 `待复核`），**绝不让它崩掉循环**。
+        #      铁律本来就是"判不出来不猜"，所以返回 None 是正确语义。
+        _h, _w = bgr.shape[:2]
+        _geom_ok = True
+        if geom:
+            try:
+                _ta = geom.get("top_art") or ()
+                if len(_ta) == 4 and (int(_ta[2]) > _w or int(_ta[3]) > _h
+                                      or int(_ta[0]) < 0 or int(_ta[1]) < 0):
+                    _geom_ok = False
+            except Exception:                      # noqa: BLE001
+                _geom_ok = False
+        if not _geom_ok:
+            return {"unit": None, "owner": None, "score": 0.0, "margin": 0.0,
+                    "marker": "", "inserted": None, "card_type": "", "raw": None,
+                    "reject": "geom_mismatch",
+                    "geoms": "geom=%s img=%dx%d" % (geom.get("top_art"), _w, _h)}
+        try:
+            r = T.read_actor(bgr, self.bank, geom=geom)
+        except Exception as e:                     # noqa: BLE001
+            # 几何/尺寸不符、或 axis_actor 内部任何取值异常 → 这一帧判不出来（不崩）
+            return {"unit": None, "owner": None, "score": 0.0, "margin": 0.0,
+                    "marker": "", "inserted": None, "card_type": "", "raw": None,
+                    "reject": "axis_error", "geoms": str(e)[:120]}
         if r is None:
             return r
         # ① 卡面细化（盲盒 / 敌方 buff）
