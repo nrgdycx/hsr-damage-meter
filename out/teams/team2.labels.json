@@ -1,0 +1,134 @@
+{
+ "_note": "把每组填成角色名（直接照队伍面板念）。同一个角色若被分成多组（不同形态/光照），各填同一个名字即可 —— 两个形态都会进同一个角色的模板库。不是角色的组留空即可（默认跳过，不会进模板库）。",
+ "_team": "team2",
+ "_step": 0.8,
+ "_answers": {
+  "1": "银狼",
+  "2": "火花",
+  "3": "爻光",
+  "4": "真珠",
+  "5": "银狼",
+  "6": "银狼",
+  "7": "",
+  "8": "火花",
+  "9": "",
+  "10": "",
+  "11": ""
+ },
+ "_clusters": {
+  "1": {
+   "n": 45,
+   "rep": 240.0,
+   "worst": 237.0,
+   "worst_sim": 0.993,
+   "markers": {
+    "ally_dot": 30,
+    "ally_star": 15
+   },
+   "is_unit": true
+  },
+  "2": {
+   "n": 21,
+   "rep": 249.0,
+   "worst": 79.0,
+   "worst_sim": 1.006,
+   "markers": {
+    "ally_dot": 21
+   },
+   "is_unit": true
+  },
+  "3": {
+   "n": 8,
+   "rep": 262.0,
+   "worst": 14.0,
+   "worst_sim": 0.656,
+   "markers": {
+    "ally_star": 2,
+    "ally_dot": 6
+   },
+   "is_unit": true
+  },
+  "4": {
+   "n": 7,
+   "rep": 34.0,
+   "worst": 276.0,
+   "worst_sim": 1.211,
+   "markers": {
+    "ally_dot": 5,
+    "ally_star": 2
+   },
+   "is_unit": true
+  },
+  "5": {
+   "n": 2,
+   "rep": 35.0,
+   "worst": 35.0,
+   "worst_sim": 1.173,
+   "markers": {
+    "ally_dot": 2
+   },
+   "is_unit": true
+  },
+  "6": {
+   "n": 2,
+   "rep": 273.0,
+   "worst": 132.0,
+   "worst_sim": 1.187,
+   "markers": {
+    "ally_dot": 2
+   },
+   "is_unit": true
+  },
+  "7": {
+   "n": 1,
+   "rep": 12.0,
+   "worst": 12.0,
+   "worst_sim": -1.0,
+   "markers": {
+    "ally_star": 1
+   },
+   "is_unit": true
+  },
+  "8": {
+   "n": 1,
+   "rep": 85.0,
+   "worst": 85.0,
+   "worst_sim": -1.0,
+   "markers": {
+    "ally_dot": 1
+   },
+   "is_unit": true
+  },
+  "9": {
+   "n": 1,
+   "rep": 127.0,
+   "worst": 127.0,
+   "worst_sim": -1.0,
+   "markers": {
+    "ally_star": 1
+   },
+   "is_unit": true
+  },
+  "10": {
+   "n": 1,
+   "rep": 137.0,
+   "worst": 137.0,
+   "worst_sim": -1.0,
+   "markers": {
+    "ally_dot": 1
+   },
+   "is_unit": true
+  },
+  "11": {
+   "n": 1,
+   "rep": 242.0,
+   "worst": 242.0,
+   "worst_sim": -1.0,
+   "markers": {
+    "ally_star": 1
+   },
+   "is_unit": true
+  }
+ },
+ "_user_verdict": "按 samples/team2_请指认.png 指认：组1/5/6=银狼（三形态）、组2/8=火花、组3=爻光、组4=真珠；组7/9/10/11 是过渡/特效卡，留空。"
+}

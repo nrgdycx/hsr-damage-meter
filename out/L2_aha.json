@@ -1,0 +1,96 @@
+{
+ "spans": [
+  {
+   "text": "140130",
+   "t0": 25.6,
+   "t1": 26.8,
+   "n": 6,
+   "portraits": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "font": "default",
+   "portrait": null
+  },
+  {
+   "text": "532256",
+   "t0": 165.2,
+   "t1": 166.0,
+   "n": 4,
+   "portraits": [
+    null,
+    null,
+    null,
+    null
+   ],
+   "font": "default",
+   "portrait": null
+  },
+  {
+   "text": "679500",
+   "t0": 167.8,
+   "t1": 168.2,
+   "n": 3,
+   "portraits": [
+    null,
+    null,
+    null
+   ],
+   "font": "default",
+   "portrait": null
+  },
+  {
+   "text": "230552",
+   "t0": 168.8,
+   "t1": 170.4,
+   "n": 8,
+   "portraits": [
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+   ],
+   "font": "default",
+   "portrait": null
+  },
+  {
+   "text": "593044",
+   "t0": 183.4,
+   "t1": 184.0,
+   "n": 4,
+   "portraits": [
+    null,
+    null,
+    null,
+    null
+   ],
+   "font": "default",
+   "portrait": null
+  }
+ ],
+ "ratios": [],
+ "by_unit": {
+  "未知": [
+   "140130",
+   "532256",
+   "679500",
+   "230552",
+   "593044"
+  ]
+ },
+ "elation_mult": {
+  "火花": 6.875,
+  "爻光": 2.5,
+  "银狼": 6.75
+ },
+ "pearl_note": "真珠的欢愉技（150320）本身不出伤，是给全队下一次攻击 +0.5% —— 不会出现在阿哈结算里",
+ "rows": null
+}

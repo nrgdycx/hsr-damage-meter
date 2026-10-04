@@ -1,0 +1,24 @@
+改名②：更新全部 .py 里对新模块名的引用（271 处 / 96 个 .py）
+
+用 Python 脚本 tools/prep/rename_refs.py 做单遍正则替换（不是 PowerShell 管道，
+所以中文 UTF-8 与行首缩进完好）：
+  · 名字边界用 (?<![0-9A-Za-z_])/(?![0-9A-Za-z_])，长名优先
+    → 资源文件名 out/axis_top_bank_E.npz 等**不受影响**（其前是下划线）
+  · 自检①：替换后全仓 .py 无旧名残留
+  · 自检②：逐行比对，改动的每一行都**只**因换名而变化
+
+替换处数由 tools/prep/rename_count.py 比对 git blob 得出（不数 diff 的 +/- 行）：
+  axis_top_E 70  screen_adapt_L7 29  capture_B 33  axis_top_E2 31
+  hud_onnx_B 30  event_engine_4 22  event_engine_C 16  truth_A 16
+  axis_extract_L2 10  hud2_read_L2 7  axis_hold_L6 6  axis_data_E 1
+
+回归（改前后一致）：
+  · eval_holdout.py              留出集逐字 29/29 = 100%、整串 5/5
+  · axis_actor.py --selftest     真值帧 18 条 + 缩放 3 档全绿；
+                                 仍只有已知边界帧 t=159（改名前就有，非本次引入）
+  · events_v4.py --anchors       一致 10 / 不一致 0 / 正确弃权 8
+  · mvp/live_mvp.py --replay     3/3 帧判出行动者，链路正常
+  · 12 个新模块名 import 冒烟全通过
+
+注：tools/prep/rename_*.py 是本次改写工具，其映射表里必然保留旧名（验收④的唯一豁免）。
+注：本 commit 不含 .md（留给 ③），也不含 out/p3_tools/（历史留档，见交付记录 §1）。

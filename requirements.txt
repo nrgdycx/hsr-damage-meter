@@ -1,0 +1,29 @@
+# 崩铁伤害统计 —— Python 依赖
+#
+# 安装：
+#     pip install -r requirements.txt
+#
+# ⚠️ 另外还需要 **ffmpeg**（用于从录屏抽帧）——它不是 Python 包：
+#     Windows:  winget install Gyan.FFmpeg        （装完重开终端）
+#     或        下载后把 ffmpeg.exe 所在目录加进 PATH
+#     或        设环境变量:  setx HSR_FFMPEG "D:\tools\ffmpeg\bin\ffmpeg.exe"
+#   程序会自动查找；找不到时会给出带指引的报错（见 `ffmpeg_path.py`）。
+#
+# ⚠️ 本仓库把 mss 解包版放在 `vendor/` 里（因为某些受限环境 pip 装不了包）。
+#    正常环境直接 pip install 即可，`vendor/` 那份会被优先使用/忽略都不影响。
+
+# ── 运行时必需 ────────────────────────────────────────────────
+numpy>=1.24
+opencv-python>=4.8          # import cv2
+pillow>=10.0                # import PIL
+onnxruntime>=1.16           # 实时推理（HUD 数字分类）
+mss>=9.0                    # 实时抓屏（本仓库 vendor/ 里有解包版）
+
+# ── 仅"离线训练 / 对账"需要 ───────────────────────────────────
+# 实时链路走 ONNX，**不需要 torch**（这也是 exe 能压到 ~230MB 的原因）。
+# 只有重建数据集、重训模型、跑 torch 后端对账时才要装：
+torch>=2.2                  # train_digit_cnn / digit_dataset / eval_holdout
+onnxscript>=0.1             # torch.onnx.export 的依赖（导出 ONNX 用）
+
+# ── 间接依赖（通常随上面自动装上，显式列出便于排错）─────────────
+certifi                     # 被 mss / 网络相关库引用

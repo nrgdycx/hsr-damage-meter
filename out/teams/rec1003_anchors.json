@@ -1,0 +1,98 @@
+{
+ "source": "records/屏幕录制 2026-10-03 123200.mp4",
+ "note": "用户 2026-10-03 指认；#2 由 1=驭空 推断待确认",
+ "anchors": {
+  "1": {
+   "t": 16.0,
+   "name": "驭空",
+   "marker": "ally_star",
+   "score": 1.51
+  },
+  "2": {
+   "t": 51.0,
+   "name": "驭空",
+   "marker": "ally_dot",
+   "score": 1.42
+  },
+  "3": {
+   "t": 89.8,
+   "name": "阿兰",
+   "marker": "ally_star",
+   "score": 1.83
+  },
+  "4": {
+   "t": 140.2,
+   "name": "停云",
+   "marker": "ally_dot",
+   "score": 1.77
+  },
+  "5": {
+   "t": 152.6,
+   "name": "三月七·冬去煦至",
+   "marker": "ally_star",
+   "score": 1.75
+  },
+  "6": {
+   "t": 169.6,
+   "name": "停云",
+   "marker": "ally_star",
+   "score": 1.8
+  },
+  "7": {
+   "t": 209.2,
+   "name": "米沙",
+   "marker": "ally_dot",
+   "score": 0.82
+  },
+  "8": {
+   "t": 232.4,
+   "name": "佩拉",
+   "marker": "ally_star",
+   "score": 1.83
+  },
+  "9": {
+   "t": 282.0,
+   "name": "加拉赫",
+   "marker": "ally_star",
+   "score": 1.81
+  },
+  "10": {
+   "t": 291.0,
+   "name": "加拉赫",
+   "marker": "ally_dot",
+   "score": 1.44
+  },
+  "11": {
+   "t": 336.6,
+   "name": "寒鸦",
+   "marker": "ally_star",
+   "score": 1.83
+  },
+  "12": {
+   "t": 349.0,
+   "name": "老杨",
+   "marker": "ally_star",
+   "score": 1.82
+  },
+  "13": {
+   "t": 390.0,
+   "name": "真理",
+   "marker": "ally_star",
+   "score": 1.81
+  },
+  "14": {
+   "t": 393.2,
+   "name": "真理",
+   "marker": "ally_star",
+   "score": 1.81
+  },
+  "15": {
+   "t": 413.2,
+   "name": "周日",
+   "marker": "ally_star",
+   "score": 1.82
+  }
+ },
+ "_superseded_by": "rec1003_confirmed.json（用户 2026-10-03 确认『这版一点问题都没有』）",
+ "_warning": "本文件的编号↔名字对应不准（曾把上一版编号套到新版取样上），请以 confirmed 版为准"
+}

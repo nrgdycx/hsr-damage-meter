@@ -1,0 +1,118 @@
+{
+ "video": "records/屏幕录制 2026-10-03 123200.mp4",
+ "mode": "模拟宇宙（差分宇宙）",
+ "confirmed_by": "用户 2026-10-03：『这版一点问题都没有』",
+ "note": "行动卡几何与本录屏一致；卡片来自 frames/battle1003（只采左标记=ally_* 的战斗帧）。本文件是「从录屏挖新角色」流程的唯一可信锚点。",
+ "card_box": [
+  82,
+  78,
+  281,
+  178
+ ],
+ "characters": {
+  "驭空": {
+   "samples": [
+    {
+     "t": 16.0,
+     "marker": "ally_star"
+    },
+    {
+     "t": 51.0,
+     "marker": "ally_dot"
+    }
+   ]
+  },
+  "阿兰": {
+   "samples": [
+    {
+     "t": 90.0,
+     "marker": "ally_star"
+    }
+   ]
+  },
+  "停云": {
+   "samples": [
+    {
+     "t": 140.0,
+     "marker": "ally_dot"
+    },
+    {
+     "t": 170.0,
+     "marker": "ally_star"
+    }
+   ]
+  },
+  "三月七·冬去煦至": {
+   "samples": [
+    {
+     "t": 153.0,
+     "marker": "ally_star"
+    }
+   ]
+  },
+  "米沙": {
+   "samples": [
+    {
+     "t": 209.0,
+     "marker": "ally_dot"
+    }
+   ]
+  },
+  "佩拉": {
+   "samples": [
+    {
+     "t": 232.0,
+     "marker": "ally_star"
+    }
+   ]
+  },
+  "加拉赫": {
+   "samples": [
+    {
+     "t": 282.0,
+     "marker": "ally_star"
+    },
+    {
+     "t": 291.0,
+     "marker": "ally_dot"
+    }
+   ]
+  },
+  "寒鸦": {
+   "samples": [
+    {
+     "t": 337.0,
+     "marker": "ally_star"
+    }
+   ]
+  },
+  "老杨": {
+   "samples": [
+    {
+     "t": 349.0,
+     "marker": "ally_star"
+    }
+   ]
+  },
+  "真理": {
+   "samples": [
+    {
+     "t": 390.0,
+     "marker": "ally_star"
+    },
+    {
+     "t": 393.0,
+     "marker": "ally_star"
+    }
+   ]
+  },
+  "周日": {
+   "samples": [
+    {
+     "t": 413.0,
+     "marker": "ally_star"
+    }
+   ]
+  }
+ }
+}

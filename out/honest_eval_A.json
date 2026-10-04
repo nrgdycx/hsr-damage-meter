@@ -1,0 +1,74 @@
+[
+ {
+  "seed_or_n": 7,
+  "kind": "single",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 8,
+  "kind": "single",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 9,
+  "kind": "single",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 10,
+  "kind": "single",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 11,
+  "kind": "single",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 3,
+  "kind": "ens3",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 5,
+  "kind": "ens5",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 9,
+  "kind": "ens9",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ },
+ {
+  "seed_or_n": 0,
+  "kind": "ens9+tta",
+  "strings": 5,
+  "glyph_hits": 29,
+  "glyph_total": 29,
+  "detail": "t=226 49065 t=261 721193 t=275 904004 t=284 111860 t=311 379852"
+ }
+]

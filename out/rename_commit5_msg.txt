@@ -1,0 +1,24 @@
+改名⑤：写入交付记录 + 改名工具链（8 个可复用/可审计脚本）
+
+deliverable：docs/代码改名_交付.md
+  · 新旧名映射表（12 条）
+  · 实际改动量：.py 271 处 / 96 文件、.md 159 处 / 18 篇、spec 8 处
+  · 三条回归 + MVP + exe 打包的实测数字（与改名前基线逐字对比）
+  · 问题记录：循环依赖 geometry<->capture **没有变复杂**（逐行比对证明行号/缩进/惰性度全同）；
+    改写工具自我改写事故（已修 + 已加防呆）；自检两次误报的真实原因；
+    与用户并行文档合并的撞车处理；提交信息 hash 的自指问题
+  · 明确列出"本次没做"：分包、解循环依赖、改 tools 文件名、改图片资源名
+  · 明确列出"我不确定/需拍板"的 5 条
+
+工具链（tools/prep/，均带中文注释说明"为什么这么做"）：
+  rename_git_mv.py     git mv 改名（前置校验 + 逐条校验）
+  rename_refs.py       单遍正则改引用，带两条自检（已排除自我改写）
+  rename_scan.py       旧名分布扫描；--imports 即验收④
+  rename_guard.py      找出"旧名出现在路径/文件名里"的位置，防误伤资源名
+  rename_doc_list.py   判定哪些 .md 是本次改名动过的（用于限定 commit③）
+  rename_debug.py      单文件逐行核对替换
+  rename_count.py      精确统计替换处数（比对 git blob，不数 diff 行）
+  msg_filter.py        filter-branch 用的 msg-filter（避免 PowerShell 吃掉 GIT_COMMIT）
+  finalize_rename.py   收尾：核对交付记录里的 hash 与仓库实际是否一致
+
+注：这些脚本**有意**保留旧名（映射表），是验收④的唯一豁免。

@@ -1,0 +1,786 @@
+{
+ "per_unit": {
+  "银狼": {
+   "n": 50,
+   "ok": 49
+  },
+  "爻光": {
+   "n": 5,
+   "ok": 5
+  },
+  "火花": {
+   "n": 22,
+   "ok": 22
+  },
+  "真珠": {
+   "n": 7,
+   "ok": 7
+  }
+ },
+ "loo_ok": 83,
+ "loo_n": 84,
+ "thresholds": {
+  "THR": 0.9,
+  "MIN_MARGIN": 0.45
+ },
+ "neg_max": 1.514,
+ "neg_n": 221,
+ "rows": [
+  {
+   "t": 45.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.854,
+   "margin": 1.326,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 46.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.88,
+   "margin": 1.373,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 47.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.87,
+   "margin": 1.373,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 48.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.88,
+   "margin": 1.38,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 49.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.854,
+   "margin": 1.383,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 95.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.793,
+   "margin": 1.32,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 96.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.861,
+   "margin": 1.412,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 97.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.846,
+   "margin": 1.397,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 98.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.78,
+   "margin": 1.302,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 99.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.861,
+   "margin": 1.388,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 124.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.861,
+   "margin": 1.409,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 128.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.872,
+   "margin": 1.381,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 129.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.886,
+   "margin": 1.394,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 130.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.835,
+   "margin": 1.356,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 131.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.886,
+   "margin": 1.395,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 134.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.84,
+   "margin": 1.343,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 197.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.851,
+   "margin": 1.334,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 198.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.88,
+   "margin": 1.393,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 199.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.873,
+   "margin": 1.367,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 200.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.859,
+   "margin": 1.343,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 201.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.863,
+   "margin": 1.404,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 237.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.132,
+   "margin": 0.658,
+   "second": "火花",
+   "card_type": "unit"
+  },
+  {
+   "t": 238.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.838,
+   "margin": 1.415,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 239.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.858,
+   "margin": 1.414,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 240.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.831,
+   "margin": 1.376,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 241.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.846,
+   "margin": 1.429,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 244.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.846,
+   "margin": 1.421,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 245.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.79,
+   "margin": 1.324,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 269.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.858,
+   "margin": 1.418,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 270.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.835,
+   "margin": 1.445,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 271.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.793,
+   "margin": 1.359,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 272.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.849,
+   "margin": 1.384,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 275.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.674,
+   "margin": 1.324,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 53.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.838,
+   "margin": 1.399,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 54.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.841,
+   "margin": 1.438,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 55.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.821,
+   "margin": 1.364,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 56.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.801,
+   "margin": 1.421,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 59.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.816,
+   "margin": 1.36,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 139.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.841,
+   "margin": 1.485,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 140.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.821,
+   "margin": 1.355,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 141.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.826,
+   "margin": 1.397,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 142.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.811,
+   "margin": 1.389,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 143.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.815,
+   "margin": 1.341,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 146.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.811,
+   "margin": 1.384,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 147.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.824,
+   "margin": 1.416,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 132.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.187,
+   "margin": 1.263,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 273.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.187,
+   "margin": 1.268,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 35.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.041,
+   "margin": 0.506,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 36.0,
+   "truth": "银狼",
+   "pred": "银狼",
+   "score": 1.041,
+   "margin": 0.682,
+   "second": "火花",
+   "card_type": "unit"
+  },
+  {
+   "t": 205.0,
+   "truth": "银狼",
+   "pred": null,
+   "score": 0.857,
+   "margin": 0.055,
+   "second": "爻光",
+   "card_type": "elation"
+  },
+  {
+   "t": 148.0,
+   "truth": "爻光",
+   "pred": "爻光",
+   "score": 1.617,
+   "margin": 0.716,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 13.0,
+   "truth": "爻光",
+   "pred": "爻光",
+   "score": 1.382,
+   "margin": 0.495,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 93.0,
+   "truth": "爻光",
+   "pred": "爻光",
+   "score": 1.787,
+   "margin": 0.852,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 94.0,
+   "truth": "爻光",
+   "pred": "爻光",
+   "score": 1.787,
+   "margin": 0.912,
+   "second": "火花",
+   "card_type": "unit"
+  },
+  {
+   "t": 262.0,
+   "truth": "爻光",
+   "pred": "爻光",
+   "score": 1.617,
+   "margin": 0.874,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 247.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.87,
+   "margin": 1.43,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 248.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.884,
+   "margin": 1.432,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 249.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.875,
+   "margin": 1.459,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 250.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.892,
+   "margin": 1.445,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 251.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.892,
+   "margin": 1.443,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 252.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.873,
+   "margin": 1.418,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 253.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.854,
+   "margin": 1.449,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 254.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.479,
+   "margin": 0.852,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 322.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.88,
+   "margin": 1.44,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 323.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.889,
+   "margin": 1.429,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 324.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.889,
+   "margin": 1.436,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 325.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.829,
+   "margin": 1.444,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 326.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.889,
+   "margin": 1.439,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 327.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.889,
+   "margin": 1.442,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 328.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.479,
+   "margin": 0.592,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 79.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.613,
+   "margin": 0.967,
+   "second": "真珠",
+   "card_type": "unit"
+  },
+  {
+   "t": 80.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.845,
+   "margin": 1.425,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 81.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.856,
+   "margin": 1.431,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 82.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.892,
+   "margin": 1.419,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 83.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.892,
+   "margin": 1.424,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 84.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.891,
+   "margin": 1.417,
+   "second": "银狼",
+   "card_type": "unit"
+  },
+  {
+   "t": 85.0,
+   "truth": "火花",
+   "pred": "火花",
+   "score": 1.613,
+   "margin": 0.744,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 44.0,
+   "truth": "真珠",
+   "pred": "真珠",
+   "score": 1.759,
+   "margin": 0.897,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 104.0,
+   "truth": "真珠",
+   "pred": "真珠",
+   "score": 1.802,
+   "margin": 0.902,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 155.0,
+   "truth": "真珠",
+   "pred": "真珠",
+   "score": 1.802,
+   "margin": 0.94,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 196.0,
+   "truth": "真珠",
+   "pred": "真珠",
+   "score": 1.759,
+   "margin": 0.871,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 277.0,
+   "truth": "真珠",
+   "pred": "真珠",
+   "score": 1.677,
+   "margin": 0.808,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 34.0,
+   "truth": "真珠",
+   "pred": "真珠",
+   "score": 1.706,
+   "margin": 0.772,
+   "second": "爻光",
+   "card_type": "unit"
+  },
+  {
+   "t": 276.0,
+   "truth": "真珠",
+   "pred": "真珠",
+   "score": 1.706,
+   "margin": 0.806,
+   "second": "爻光",
+   "card_type": "unit"
+  }
+ ]
+}

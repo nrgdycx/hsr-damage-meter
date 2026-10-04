@@ -1,0 +1,12 @@
+# 统一按 LF 存储/检出，避免 Windows 上 CRLF 来回翻动
+* text=auto eol=lf
+
+# 二进制资产（模型 / 数据集 / 模板库 / 图片）不做行尾转换
+*.pt    binary
+*.onnx  binary
+*.npz   binary
+*.npy   binary
+*.png   binary
+*.jpg   binary
+*.mp4   binary
+*.whl   binary

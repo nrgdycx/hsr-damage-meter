@@ -1,0 +1,6 @@
+{
+  "pt_sha256": "831195c3a45dc7fb81628e95c5559bf28ddffb10736ea41ddda37c21e55c6ec2",
+  "pt_mtime": 1790760473.1002827,
+  "exported_at": "2026-10-01 00:50:51",
+  "note": "由 export_onnx_B.py --check 验证 argmax 全一致后记录（.onnx 本身是 train_digit_cnn.py 导出的）"
+}

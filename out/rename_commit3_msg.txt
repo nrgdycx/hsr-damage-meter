@@ -1,0 +1,19 @@
+改名③：更新 18 篇 .md 里对旧模块名的引用（159 处，只改名不删文档）
+
+用 tools/prep/rename_refs.py --md（Python 文本 IO + 单遍正则，非 PowerShell 管道）。
+  · 文档里的旧模块名 -> 新名：159 处 / 18 篇
+  · **没有删除任何文档**（按用户要求：文档合并在并行进行，本次只改里面的名字）
+  · 行级自检：改动的每一行都只因子串换名而变化
+
+替换处数由 tools/prep/rename_count.py 比对 git blob 得出：
+  axis_top_E 45  event_engine_4 34  axis_hold_L6 17  screen_adapt_L7 14
+  capture_B 12  axis_top_E2 9  event_engine_C 7  truth_A 6
+  hud2_read_L2 5  axis_extract_L2 4  hud_onnx_B 4  axis_data_E 2
+
+⚠️ 与用户并行进行的「文档合并」共用同一批 .md 文件。本 commit **刻意只纳入**
+   tools/prep/rename_doc_list.py 判定为「本次改名真正动过的 18 篇」，
+   用户在 out/p3_tools/README.md、out/real_frames/README.md 里的合并改动**未纳入**。
+   （同一文件内无法拆分 hunk，所以 README.md 等 4 篇里用户的链接扁平化改动
+     会随本 commit 一起进去 —— 在此说明，避免误认。）
+
+注：out/p3_tools/*.py（4 个）是有意保留的历史留档，见交付记录 §1。
