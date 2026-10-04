@@ -769,9 +769,14 @@ def attribute4(readings, run, back=1.5, fwd=0.5, ult_window=True, ult_max_age=No
     elif out["card_type"] == "empty":
         out["status"] = "review"
         issues.append("top_slot_empty")
-    elif out["card_type"] in ("aha", "elation"):
-        out["status"] = "review"
-        issues.append("aha_needs_owner")
+    elif out["card_type"] in ("aha", "elation", "blindbox"):
+        # 同 events.py：T2 认出 owner 才采纳，认不出仍 review（2026-10-05 修）
+        if out.get("owner"):
+            out["status"] = "ok"
+            issues.append("owner_from_t2")
+        else:
+            out["status"] = "review"
+            issues.append("aha_needs_owner")
     elif out["owner"]:
         out["status"] = "ok"
     else:

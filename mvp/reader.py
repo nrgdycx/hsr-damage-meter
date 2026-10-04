@@ -84,24 +84,51 @@ class Perceiver:
         self._aha_hist = []          # [(t, member)]
         self._aha_last_t = None
         if backend == "onnx":
-            from hud_digits import HudOnnxReader
-            self._onnx = HudOnnxReader(conf_min=self.conf_min, check_fresh=check_fresh)
+            self.check_fresh = bool(check_fresh)
+            self._readers = {}          # profile -> HudOnnxReader（按字体档案缓存）
+            self._onnx = None
             self._model = None
         elif backend == "torch":
             import read_hud          # 惰性：只有离线/对账后端才需要（这一步会拉起 torch）
             self._onnx = None
+            self._readers = {}
             self._model = read_hud.load_model(profile)
         else:
             raise ValueError("backend 只能是 onnx / torch，收到 %r" % backend)
         self.bank = actor_bank if actor_bank is not None else T.load_bank()
 
     # ────────────────────────── HUD ──────────────────────────
-    def _classify_glyphs(self, gs):
+    def _reader_for(self, profile):
+        """按字体档案取（并缓存）一个 ONNX 分类器。
+
+        ⭐ 2026-10-05 加：**支持多字体档案**。
+        起因（用户实机反馈第 2 条）：「狼尊强普伤害一点都没记录」——
+        强普的 HUD 数字是**像素方块字体**（档案 `yinlang999`），
+        而本模块原来把 `profile="default"` 写死，**从来没切过档案**，
+        于是像素数字被当成常规字体去分割/分类 → 读不出 → 整段不记录。
+
+        离线侧早就有 `hud_profiles.profile_for_actor(actor)` 做这个映射
+        （`actor_keys` 里含 `银狼999` / `狼尊`），只是实时链路没用。
+        """
+        prof = profile or "default"
+        if self.backend != "onnx":             # torch 后端：模型是单例，不缓存多档
+            return None
+        r = self._readers.get(prof)
+        if r is None:
+            from hud_digits import HudOnnxReader
+            r = HudOnnxReader(conf_min=self.conf_min, check_fresh=self.check_fresh,
+                              profile=prof)
+            self._readers[prof] = r
+        return r
+
+    def _classify_glyphs(self, gs, profile=None):
         """字形 → (读数串, 最低置信度, 字形数, 坏字形数)。几何守门与离线同口径。"""
+        prof = profile or self.profile
         if not gs:
             return "", 0.0, 0, 0
-        if self._onnx is not None:
-            res = self._onnx.classify(gs)
+        rd = self._reader_for(prof)
+        if rd is not None:
+            res = rd.classify(gs)
         else:
             import torch
             x = torch.tensor(np.stack([v for v, _, _ in gs])[:, None], dtype=torch.float32)
@@ -111,26 +138,28 @@ class Perceiver:
             res = [(int(d), float(c)) for d, c in zip(pd.tolist(), cf.tolist())]
         chars, mins, nbad = [], 1.0, 0
         for (v, w, h), (d, c) in zip(gs, res):
-            ok, _ = self.HP.geom_ok(self.profile, w, h)
+            ok, _ = self.HP.geom_ok(prof, w, h)
             bad = (not ok) or c < self.conf_min
             chars.append("?" if bad else str(d))
             mins = min(mins, c)
             nbad += 1 if bad else 0
         return "".join(chars), mins, len(res), nbad
 
-    def read_hud_frame(self, frame_rgb):
+    def read_hud_frame(self, frame_rgb, profile=None):
         """整帧（RGB, int16/uint8）→ HUD 读数。走**动态定位**，与离线扫描同口径。"""
-        gs = self.HP.glyphs(self.profile, frame_rgb)
-        return self._classify_glyphs(gs)
+        prof = profile or self.profile
+        gs = self.HP.glyphs(prof, frame_rgb)
+        return self._classify_glyphs(gs, prof)
 
-    def read_hud_region(self, region_rgb, top, left, bar_rows=None):
+    def read_hud_region(self, region_rgb, top, left, bar_rows=None, profile=None):
         """已裁好的 HUD 区域（RGB）→ (读数串, 最低置信, 字形数, 坏字形数, 可疑原值)。
 
         `span_guard=True` 时多一道"段宽/墨迹跨度"闸（见模块级 `span_guard_hit`）：
         命中就**不把那个值交出去**（返回 `'?'*n`），原值放在第 5 个返回值里供诊断。
         """
-        gs = self.HP.glyphs_cropped(self.profile, region_rgb, top, left, bar_rows=bar_rows)
-        text, conf, n, nbad = self._classify_glyphs(gs)
+        prof = profile or self.profile
+        gs = self.HP.glyphs_cropped(prof, region_rgb, top, left, bar_rows=bar_rows)
+        text, conf, n, nbad = self._classify_glyphs(gs, prof)
         if self.span_guard and text and span_guard_hit(region_rgb, gs):
             return "?" * max(1, n), conf, n, max(1, nbad), text
         return text, conf, n, nbad, ""
@@ -236,20 +265,9 @@ class Perceiver:
         row = new_row(t)
         t0 = time.perf_counter()
         suspect = ""
-        if region_rgb is not None:
-            text, conf, n, nbad, suspect = self.read_hud_region(region_rgb, top, left, bar_rows)
-            if want_lm and text:
-                row["lm"] = self.hud_leftmost(region_rgb, top, left)
-        elif frame_rgb is not None:
-            text, conf, n, nbad = self.read_hud_frame(frame_rgb)
-            if want_lm and text:
-                arr = np.asarray(frame_rgb, dtype=np.int16)
-                row["lm"] = self.hud_leftmost(arr[HG.CY0:HG.CY1, HG.CX0:HG.CX1],
-                                              HG.CY0, HG.CX0)
-        else:
-            raise ValueError("read() 需要 frame_rgb 或 region_rgb")
-        t1 = time.perf_counter()
-        row.update({"text": text, "n": n, "conf": round(conf, 3), "nbad": nbad})
+        # ① **先读行动轴**（原来 HUD 在前）。
+        #    为什么调顺序：HUD 的**字体档案要按行动者选**（狼尊强普=像素字体，见 _reader_for）。
+        #    行动轴 ~1ms、HUD ~1ms，顺序调换不影响预算。
         if read_axis and axis_rgb is not None:
             a = self.read_actor(axis_rgb, geom=axis_geom, offset=axis_offset, t=t)
             row.update({"unit": a["unit"] or "", "owner": a["owner"] or "",
@@ -259,9 +277,49 @@ class Perceiver:
                         "inserted": "" if a["inserted"] is None else str(int(a["inserted"])),
                         "card_type": a["card_type"] or "",
                         "raw_unit": a["raw"]})
+        t1 = time.perf_counter()
+        # ② 按行动者（含 T2 卡面细化）选字体档案 → 读 HUD
+        prof = self.profile_for(row)
+        row["profile"] = prof
+        if region_rgb is not None:
+            text, conf, n, nbad, suspect = self.read_hud_region(
+                region_rgb, top, left, bar_rows, profile=prof)
+            if want_lm and text:
+                row["lm"] = self.hud_leftmost(region_rgb, top, left)
+        elif frame_rgb is not None:
+            text, conf, n, nbad = self.read_hud_frame(frame_rgb, profile=prof)
+            if want_lm and text:
+                arr = np.asarray(frame_rgb, dtype=np.int16)
+                row["lm"] = self.hud_leftmost(arr[HG.CY0:HG.CY1, HG.CX0:HG.CX1],
+                                              HG.CY0, HG.CX0)
+        else:
+            raise ValueError("read() 需要 frame_rgb 或 region_rgb")
         t2 = time.perf_counter()
-        row["ms"] = {"hud": (t1 - t0) * 1000.0, "axis": (t2 - t1) * 1000.0}
+        row.update({"text": text, "n": n, "conf": round(conf, 3), "nbad": nbad})
+        row["ms"] = {"hud": (t2 - t1) * 1000.0, "axis": (t1 - t0) * 1000.0}
         return row
+
+    def profile_for(self, row):
+        """按行动者选 HUD 字体档案。
+
+        ⭐ 2026-10-05 加（用户实机反馈第 2 条：狼尊强普伤害没记录）。
+        规则来自 `hud_profiles`：`profile_for_actor(actor)` 查各档案的 `actor_keys`
+        （`yinlang999` 档登记了 `银狼999` / `狼尊` / `yinlang999` / `999` …）。
+
+        判据里**先用 T2 的卡面细化结果**（`t2_card`），再用行动轴显示的 `unit`，
+        最后才是 `owner` —— 因为强普/盲盒这类"不是普通单位卡"的情况，
+        行动轴给的 `unit` 可能为空但 T2 认出了形态。
+        """
+        for key in (row.get("t2_card"), row.get("unit"), row.get("owner")):
+            if not key:
+                continue
+            try:
+                p = self.HP.profile_for_actor(key)
+            except Exception:
+                p = None
+            if p and p != "default":
+                return p
+        return self.profile
 
     def as_csv_row(self, row):
         """转成与 `out/frames_dense4.csv` 同列的一行（对账/落盘用）。"""

@@ -58,9 +58,27 @@ def extract_glyphs(rgb, top=CY0, left=CX0, bar_rows=BAR_ROWS):
 class HudOnnxReader:
     """onnxruntime CPU 版 HUD 读数器。单线程、懒加载。"""
 
-    def __init__(self, path=MODEL_ONNX, conf_min=CONF_MIN, threads=1, check_fresh=True):
+    def __init__(self, path=MODEL_ONNX, conf_min=CONF_MIN, threads=1, check_fresh=True,
+                 profile=None):
+        """`profile=` 指定**字体档案**名（`hud_profiles` 里的键）。
+
+        ⭐ 2026-10-05 加：**一套字体 = 一个分类器**。实时链路要按行动者切档案
+        （狼尊强普是像素字体 `yinlang999`），所以这里必须能按档案取对应 ONNX。
+        `path` 显式给了就用 `path`；只给 `profile` 就用该档案登记的 ONNX。
+        """
         import onnxruntime as ort
 
+        if profile and path == MODEL_ONNX:
+            try:
+                import hud_profiles as _HP
+                cand = _HP.model_path(profile)
+                if cand.endswith((".pt", ".onnx")):
+                    cand = cand.rsplit(".", 1)[0] + ".onnx"
+                if os.path.exists(cand):
+                    path = cand
+            except Exception:
+                pass
+        self.path = path
         so = ort.SessionOptions()
         so.intra_op_num_threads = threads
         so.inter_op_num_threads = threads

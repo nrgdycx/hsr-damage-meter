@@ -48,8 +48,15 @@ import events_v4 as E4      # noqa: E402
 import events as C       # noqa: E402
 import mvp.av_reader as AVR      # noqa: E402
 
-# MVP 队伍（录屏1）：遐蝶 / 风堇 / 昔涟 / 长夜月（用户已定案）
-ALLY = ("遐蝶", "风堇", "昔涟", "长夜月")
+# ⚠️ **不再硬编码队伍名单**（2026-10-05 用户实机反馈）。
+#
+# 原来写的是 MVP 队伍（遐蝶/风堇/昔涟/长夜月），后果是：
+#   换欢愉队（银狼/爻光/火花/真珠）测试时，悬浮窗上**永远挂着那 4 个幽灵行**
+#   （0 伤害、0%），而欢愉队自己的角色一个都不显示。
+#
+# 现在 `rows` **只放真正有伤害的归属**（见 `totals()`）；
+# 想让没出手的角色也占位，用 `roster_hint=(...)` 显式传（默认不占位）。
+ALLY: tuple = ()          # 兼容旧导入；仅作"额外占位名单"，默认为空
 
 SEG_KEEP = 20.0        # 参与切分的行保留时长
 REJ_KEEP = 8.0         # 参与剔除判据的行保留时长
@@ -72,7 +79,7 @@ class LiveEngine:
                  actor_split=True, plateau_break=3, absent_break=0.6, reject=True,
                  min_interval=MIN_INTERVAL, ally=ALLY, seg_keep=SEG_KEEP,
                  rej_keep=REJ_KEEP, rej_clear=REJ_CLEAR, rej_restore=REJ_RESTORE,
-                 ult_window=True, ult_max_age=None):
+                 ult_window=True, ult_max_age=None, roster_hint=None):
         self.lag = lag
         self.gap = gap
         self.reset_ratio = reset_ratio
@@ -83,6 +90,9 @@ class LiveEngine:
         self.reject = reject
         self.min_interval = min_interval
         self.ally = tuple(ally)
+        #: 想让"还没出手的角色"也占一行时显式传进来；默认**不占位**
+        #: （旧行为是硬编码 MVP 队伍，换队伍后会冒出幽灵行）
+        self.roster_hint = tuple(roster_hint or ())
         self.seg_keep, self.rej_keep = seg_keep, rej_keep
         self.rej_clear, self.rej_restore = rej_clear, rej_restore
         # T1：开大（插入终结技）演出窗口的归属兜底 —— 见 events.find_actor_ult
@@ -234,8 +244,13 @@ class LiveEngine:
             rows.append({"owner": o, "n": a["n"], "damage": a["damage"],
                          "pct": (100.0 * a["damage"] / total) if total else 0.0})
         rows.sort(key=lambda r: -r["damage"])
-        # MVP 队伍里还没出手的角色也要占一行（用户看到的永远是 4 行）
-        for name in self.ally:
+        # ⚠️ 只显示**真正有伤害的归属**（2026-10-05 改）。
+        #
+        # 原来这里会按 hardcode 的队伍名单补 0 伤害的占位行，导致换队伍后
+        # 悬浮窗上一直挂着旧队伍的 4 个幽灵（用户实测反馈：
+        # 「为什么那个悬浮窗在我测欢愉角色的时候还写着遐蝶、风堇啥的」）。
+        # 现在若要占位，必须用 roster_hint 显式传。
+        for name in self.roster_hint:
             if not any(r["owner"] == name for r in rows):
                 rows.append({"owner": name, "n": 0, "damage": 0, "pct": 0.0})
         return rows, total

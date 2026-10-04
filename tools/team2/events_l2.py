@@ -33,7 +33,7 @@ from tools.team2 import aha_member as AHA      # noqa: E402  T2：阿哈时刻�
 from tools.team2.split_add_damage import (split_attack, weigh, actor_candidates,   # noqa: E402
                                           load_catalog, load_owners)
 
-TEAM = ["火花", "爻光", "真珠", "银狼LV.999"]
+TEAM = ["火花", "爻光", "真珠", "狼尊"]
 FRAMES = _os.path.join(HERE, "out/frames_L2.csv")
 ACTORS = _os.path.join(HERE, "out/axis_actors_L2.csv")
 OUT = _os.path.join(HERE, "out/L2_split.csv")
@@ -167,8 +167,8 @@ def split_event(ev, rows, catalog, owners):
     ct, unit = card.get("card_type"), card.get("unit")
     t_card = src_row["t"] if src_row is not None else t
     if card.get("t2_kind") == "blindbox":
-        return dict(t=t, kind="blindbox", text="银狼LV.999", mark="精确", actor_t=t_card,
-                    why="顶轴 t=%g 是【头号补给盲盒】的卡 → 整段归银狼LV.999" % t_card, card=card)
+        return dict(t=t, kind="blindbox", text="狼尊", mark="精确", actor_t=t_card,
+                    why="顶轴 t=%g 是【头号补给盲盒】的卡 → 整段归狼尊" % t_card, card=card)
     if card.get("t2_kind") == "enemy_buff":
         return dict(t=t, kind="enemy_buff", text="（不计入）", mark="不计入", actor_t=t_card,
                     why="敌方给我方的 buff 卡 → 不计入我方伤害", card=card)

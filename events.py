@@ -532,10 +532,19 @@ def attribute(readings, run, back=1.5, fwd=0.5):
     elif card_type == "empty":
         out["status"] = "review"
         issues.append("top_slot_empty")
-    elif card_type in ("aha", "elation"):
-        # 阿哈时刻/欢愉技卡：框里是谁要靠框内头像，E 线当前只保证 card_type 有效
-        out["status"] = "review"
-        issues.append("aha_needs_owner")
+    elif card_type in ("aha", "elation", "blindbox"):
+        # 阿哈时刻 / 欢愉技『?』卡 / 【头号补给盲盒】。
+        #
+        # ⚠️ 历史：这里原来是**无条件** `status = "review"`（那时还不知道框里是谁）。
+        #    2026-10-05 用户实机反馈「阿哈时刻的伤害完全没记录到」「盲盒不记录」——
+        #    根因就是这行没跟着 T2 认脸一起改。
+        #    现在：T2 认出了 owner 就采纳；**认不出照旧 review**（保住"宁可漏，不要错"）。
+        if out.get("owner"):
+            out["status"] = "ok"
+            issues.append("owner_from_t2")
+        else:
+            out["status"] = "review"
+            issues.append("aha_needs_owner")
     elif out["owner"]:
         out["status"] = "ok"          # 忆灵已由 E 线映射到召唤者，这里只需非空
     else:
