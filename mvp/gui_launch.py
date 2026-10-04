@@ -149,6 +149,14 @@ class Panel:
                 "--overlay", "--pos", "%d,%d" % (x, y)]
         cmd = _spawn_cmd(args, self.frozen)
         self.log("$ " + " ".join('"%s"' % c if " " in c else c for c in cmd))
+        # 从"日志文件末尾"开始读（只显示本次新增的行）
+        self._logf_pos = 0
+        _fp0 = self._log_file()
+        if _fp0 and os.path.exists(_fp0):
+            try:
+                self._logf_pos = os.path.getsize(_fp0)
+            except OSError:
+                self._logf_pos = 0
         try:
             self.proc = subprocess.Popen(
                 cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -166,13 +174,50 @@ class Panel:
         self.reader_thread.start()
         self.root.after(300, self._tick)
 
+    def _log_file(self):
+        """采集进程的日志文件路径（`<exe 同目录>/运行日志.txt`）。
+
+        ⚠️ 2026-10-05：**打包版必须靠这个文件看输出**。
+        原因：exe 是 windowed（`HSR_NOCONSOLE=1`）→ 子进程 `sys.stdout is None`
+        → `_pump` 从管道里**一行都拿不到**，面板日志框会是空的。
+        而 `mvp/resource.setup_console()` 会把输出落到 exe 同目录的 `运行日志.txt`。
+        """
+        try:
+            from mvp import resource as R
+            return os.path.join(R.exe_dir(), R.LOG_NAME)
+        except Exception:
+            return None
+
     def _pump(self):
+        """把采集进程的输出喂到面板日志框。
+
+        两条来源（都读，谁有内容显示谁）：
+          · 源码模式：管道的 stdout
+          · 打包模式：`运行日志.txt` 的新增内容（管道是空的）
+        """
         p = self.proc
         if p is None:
             return
+        # ① 管道（源码模式有效）
         try:
             for line in p.stdout:
                 self.root.after(0, self.log, line)
+        except Exception:
+            pass
+
+    def _pump_logfile(self):
+        """增量读 `运行日志.txt`（打包模式唯一的输出来源）。"""
+        fp = self._log_file()
+        if not fp or not os.path.exists(fp):
+            return
+        try:
+            with open(fp, encoding="utf-8", errors="replace") as f:
+                f.seek(getattr(self, "_logf_pos", 0))
+                new = f.read()
+                self._logf_pos = f.tell()
+            for line in new.splitlines():
+                if line.strip():
+                    self.root.after(0, self.log, line + "\n")
         except Exception:
             pass
 
@@ -180,9 +225,14 @@ class Panel:
         """轮询子进程是否结束；没结束就继续等。"""
         if self.proc is None:
             return
+        self._pump_logfile()          # 打包模式：把日志文件里的新行显示出来
         rc = self.proc.poll()
         if rc is not None:
+            self._pump_logfile()      # 结束前再收一次尾巴
             self.log("--- 采集进程结束（返回码 %s）---" % rc)
+            fp = self._log_file()
+            if fp:
+                self.log("--- 完整日志见：%s ---\n" % fp)
             self.proc = None
             self.btn_start.configure(state="normal")
             self.btn_stop.configure(state="disabled")

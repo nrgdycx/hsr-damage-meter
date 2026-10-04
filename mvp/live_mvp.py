@@ -700,6 +700,23 @@ def run(a):
                              format(st["total"], ","), n_frame,
                              float(np.mean(ms["frame"][-30:])) if ms["frame"] else 0.0,
                              "  " + st["debug"] if a.debug else ""))
+                    # ⭐ 2026-10-05：**把诊断计数也定期写进日志**。
+                    # 起因：用户实机出问题时，统计只在会话**正常结束**时才打印 ——
+                    # 中途关窗口/崩溃就**完全无据可查**（我因此只能猜，猜错过一轮）。
+                    # 现在每 no_log_interval 秒把关键三行刷进日志，任何异常退出都留得下。
+                    try:
+                        _n = max(1, st_n["frame"])
+                        print("      [诊断] 框来源=%s ｜ 可信读数 %d/%d=%.1f%% ｜ "
+                              "行动轴 判出行动者 %d/%d=%.1f%% ｜ 事件 %d（待复核 %d）"
+                              % (" ".join("%s:%d" % (k, v)
+                                          for k, v in sorted(st_src.items())) or "无",
+                                 st_n.get("reliable", 0), _n,
+                                 100.0 * st_n.get("reliable", 0) / _n,
+                                 st_n["axis_unit"], max(1, st_n["axis_read"]),
+                                 100.0 * st_n["axis_unit"] / max(1, st_n["axis_read"]),
+                                 st["n_events"], st["n_review"]))
+                    except Exception as _e:              # noqa: BLE001
+                        print("      [诊断] 计数失败: %s" % _e)
                     t_last_log = now
                 if a.seconds and (time.perf_counter() - t_start) >= a.seconds:
                     raise KeyboardInterrupt
