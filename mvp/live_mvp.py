@@ -995,6 +995,44 @@ def _selftest_p1(perc=None):
                 read_is_reliable(row) and row["text"] == "73431")
     except Exception as e:
         chk("实机帧端到端读数（异常 %r）" % (e,), False)
+
+    # ⑥ ⭐ 轴区域 + 调用方局部几何：**绝不能再按画面裁黑边**（2026-10-05 实机闪退的根因）
+    #
+    # 实机报错「帧尺寸 (88, 280) 太小，连顶端卡区域都放不下」的真凶不是时序，而是
+    # `axis_actor.read_actor` 里那句无条件的 `crop_letterbox`：实时抓的**已经是**
+    # 轴区域（x60~340 那条），而 `geom` 用的就是这个区域自己的坐标系 —— 再按画面裁一刀，
+    # 图的原点变了、几何没变 ⇒ 卡框整体错位。
+    # 实测 1427 张真实整屏帧：**188 帧**的轴区域会被裁，其中 **65 帧**把本来 1.90 分
+    # 认得出的卡变成"待复核"、**3 帧**直接抛上面那个异常（异常没兜住就是闪退）。
+    #
+    # 这里的探针：在轴区域**顶部贴一条 40px 纯黑**（模拟暗场景/转场那条暗带）——
+    # **卡的屏幕位置没动**，所以读数必须一个字都不变。
+    # 旧代码会把它当信箱边裁掉 → 实测顶端从 `死龙`（1.785）掉成"待复核"（0.535）。
+    try:
+        from PIL import Image
+        from mvp.reader import axis_region_for
+        import axis_actor as T
+        fx = R.resource("out/real_frames/live_2880x1800_73431_q88.jpg")
+        if not os.path.exists(fx):
+            print("  ⚠️ 找不到实机帧素材 → **跳过**轴几何断言")
+        else:
+            _arr = np.asarray(Image.open(fx).convert("RGB"))
+            _reg, _lgeom, _g = axis_region_for(_arr.shape[:2])
+            _y0, _x0 = _reg["top"], _reg["left"]
+            _crop = np.ascontiguousarray(
+                _arr[_y0:_y0 + _reg["height"], _x0:_x0 + _reg["width"]][:, :, ::-1])  # BGR
+            _bank = T.load_bank()
+            _base = T.read_actor(_crop, _bank, geom=_lgeom)
+            _probe = _crop.copy()
+            _probe[:40] = 0                     # 顶部 40px 暗带（≥16px，旧代码必裁）
+            _got = T.read_actor(_probe, _bank, geom=_lgeom)
+            chk("轴区域+局部几何：卡**上方的暗带**不得被当信箱边裁掉"
+                "（顶端 %s(%.3f) → %s(%.3f)）"
+                % (_base["unit"], _base["score"], _got["unit"], _got["score"]),
+                _got["unit"] == _base["unit"]
+                and abs(_got["score"] - _base["score"]) < 1e-9)
+    except Exception as e:
+        chk("轴几何不被裁断言（异常 %r）" % (e,), False)
     return ok
 
 

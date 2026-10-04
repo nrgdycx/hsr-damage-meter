@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 E 线：行动轴顶端卡识别器（正式模块）。
 
@@ -140,6 +140,9 @@ def crop_letterbox(bgr, thr=8.0, std_thr=4.0, min_bar=4, step=4):
 
     实现取巧处：为了不给实时链路加负担，先在 **1/step 降采样**上看行/列亮度剖面
     （2880×1798 → 720×450，约 0.3 ms），只有确实存在黑边才真的裁剪。
+
+    ⚠️ `min_bar` 的单位是**降采样后的行/列数**（`min_bar=4` → 实际 ≥16px）：
+    **每一侧**单独判，细边按"没有黑边"处理（见下面"细黑边不算黑边"的说明）。
     """
     h, w = bgr.shape[:2]
     small = bgr[::step, ::step]
@@ -164,6 +167,27 @@ def crop_letterbox(bgr, thr=8.0, std_thr=4.0, min_bar=4, step=4):
     right = 0
     while right < n_c and is_bar_c[n_c - 1 - right]:
         right += 1
+    # ⚠️⚠️ 2026-10-05 修：**细黑边不算黑边**（按每一侧单独判，原来只看"四侧全小"才不裁）。
+    #
+    # 原来的逻辑：只要**任意一侧**出现 ≥min_bar 的黑边就整体裁剪。
+    # 后果：暗场景/转场时画面边上一圈 8~12px 的暗条会被当成信箱边 →
+    #   ① 自己定位那条路（`geom=None`）：几何是**裁后**按模型算的，模型假定内容顶在图上边，
+    #      于是卡框整体偏掉几个像素 → 认得出的卡变成"待复核"。
+    #      实测：`axis_actor --selftest` 里**唯一**那条红点 t=159 就是这么来的
+    #      （期望长夜月，实得待复核 分数1.25/间距0.23）。
+    #   ② 调用方给了 geom 那条路：更糟（图原点变了、几何没变）→ 见 `read_actor` 的说明。
+    # 实测把"细边"按侧忽略后（1427 张真实整屏帧）：
+    #   * "整帧自定位"与"轴区域+局部几何"两条路的一致数 **1408/1427 → 1426/1427**；
+    #   * `axis_actor --selftest` 红点 **1 → 0**。
+    # 真正的信箱边是 80~90px 量级（见上面用户素材），远大于 min_bar*step = 16px。
+    if top < min_bar:                       # ⚠️ 见下面"细黑边不算黑边"的说明
+        top = 0
+    if bot < min_bar:
+        bot = 0
+    if left < min_bar:
+        left = 0
+    if right < min_bar:
+        right = 0
     if top == 0 and bot == 0 and left == 0 and right == 0:
         return bgr, (0, 0, w, h)
     y0, y1 = min(top * step, h), max(top * step + 1, h - bot * step)
@@ -173,8 +197,6 @@ def crop_letterbox(bgr, thr=8.0, std_thr=4.0, min_bar=4, step=4):
     # 这时**原样返回**：反正标记/卡面都不会过闸。
     if y1 - y0 < 64 or x1 - x0 < 64:
         return bgr, (0, 0, w, h)
-    if y0 < min_bar and x0 < min_bar and (h - y1) < min_bar and (w - x1) < min_bar:
-        return bgr, (0, 0, w, h)          # 没有实质黑边 → 原样返回（不要动老素材）
     return bgr[y0:y1, x0:x1].copy(), (x0, y0, x1, y1)
 
 
@@ -538,10 +560,22 @@ def read_actor(src, bank=None, thr=THR, min_margin=MIN_MARGIN, geom=None):
     if bank is None:
         bank = load_bank()
     img = load_frame(src)
-    # 自动裁黑边（信箱边）——用户 2026-10-03 的素材上黑边 90px，不裁则卡框整体偏移；
-    # 没有黑边时原样返回，对老素材零影响。geom 是调用方给的（已含几何）时不再重算。
-    img, _bar = crop_letterbox(img)
+    # ⚠️⚠️ 2026-10-05 修 —— 这是用户实机"闪退"的**真正根因**（交接文档 §2.1）。
+    #
+    # 裁黑边（信箱边）**只能在"自己定位"时做**：那时 `geom` 是从裁后的图上算的，
+    # 图和几何同一个坐标系。
+    #
+    # 而**调用方给了 `geom`** 时，那张图**已经是裁好的区域**（实时抓的是 `capture.AXIS_REGION`
+    # 那条 x60~340 的轴区域），`geom` 用的就是**这个区域自己的坐标系**。
+    # 此时再"按画面裁黑边"，图的原点变了、`geom` 却没跟着变 ⇒ **卡框整体错位**。
+    # 实测（1427 张真实整屏帧）：**188 帧**的轴区域会被裁，后果两种——
+    #   * 轻：本来 1.90 分认得出的卡变成"待复核"（**65 帧**，如 f00109 本该认出遐蝶）；
+    #   * 重：卡框比图还大 → `top_art` 抛 ValueError → 采集进程被干掉
+    #     （用户看到的闪退，报错形如「帧尺寸 (88, 280) 太小」——`(88,280)` 就是**裁后**的图）。
+    # 注意 `crop_letterbox` 的判据是"纯黑且方差近 0"，暗场景/转场很容易骗过它 →
+    # 这在实机上是**常态**，不是罕见边界。
     if geom is None:
+        img, _bar = crop_letterbox(img)     # 整帧输入：先裁黑边，几何就在裁后的图上算
         geom = geom_for(img)
     s = geom["s"]
     sc = match(bank, img, s, geom=geom)
