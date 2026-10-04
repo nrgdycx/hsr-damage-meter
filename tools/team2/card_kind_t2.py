@@ -4,7 +4,7 @@
 为什么需要（用户 2026-10-04 定案）：
   * `axis_actor_team2` 把**菱形标记（ally_diamond）**一律判成 `card_type=elation`（欢愉技）。
     实测这是**两种卡**：
-      - **六边形【?】卡** → **【头号补给盲盒】**（狼尊 的召唤物）→ **归狼尊**；
+      - **六边形【?】卡** → **【头号补给盲盒】**（银狼LV.999 的召唤物）→ **归银狼LV.999**；
       - **带头像的菱形卡**（如 t=205 银狼头像）→ **欢愉技** → 归头像那个成员。
   * **红兔卡**（t=137）= **敌方给我方的 buff** → 归敌方机制，**不计入我方伤害**。
 
@@ -48,8 +48,8 @@ THR_BLINDBOX = 1.20
 THR_RABBIT = 0.90
 
 # 卡片种类 → 归属（None = 不计入我方伤害）
-KIND_OWNER = {"blindbox": "狼尊", "enemy_buff": None}
-KIND_NOTE = {"blindbox": "【头号补给盲盒】= 狼尊 的召唤物（顶轴有自己的卡）",
+KIND_OWNER = {"blindbox": "银狼LV.999", "enemy_buff": None}
+KIND_NOTE = {"blindbox": "【头号补给盲盒】= 银狼LV.999 的召唤物（顶轴有自己的卡）",
              "enemy_buff": "敌方给我方的 buff 卡 → 不计入我方伤害"}
 
 
@@ -127,7 +127,7 @@ def read_actor_t2(src, bank_e2=None, bank_t2=None, **kw):
       `t2_kind`   blindbox / enemy_buff / None
       `t2_score`  与 T2 模板的最高分
       `card_type` 被细化为 blindbox / enemy_buff / elation / unit / …
-      `owner`     盲盒 → 狼尊；enemy_buff → None（不计入我方伤害）
+      `owner`     盲盒 → 银狼LV.999；enemy_buff → None（不计入我方伤害）
     """
     crop = E2.load_crop(src)
     r = dict(E2.read_actor(src, bank=bank_e2, **kw))

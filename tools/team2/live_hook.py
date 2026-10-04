@@ -21,7 +21,7 @@ from tools_bootstrap import *  # noqa: E402,F401,F403
 from tools.team2.split_add_damage import (load_catalog, load_owners, split_attack,  # noqa: E402
                                           weigh, actor_candidates)
 
-DEFAULT_TEAM = ("火花", "爻光", "真珠", "狼尊")
+DEFAULT_TEAM = ("火花", "爻光", "真珠", "银狼LV.999")
 
 
 def annotate_event(ev, team=None):
@@ -35,9 +35,9 @@ def annotate_event(ev, team=None):
     unit = (ev.get("unit") or "").strip()
     owner = (ev.get("owner") or "").strip()
 
-    if ct == "blindbox" or unit == "狼尊盲盒":
-        return {"text": "狼尊", "mark": "精确", "whole_owner": "狼尊",
-                "why": "顶轴是【头号补给盲盒】的卡 → 整段归狼尊", "parts": []}
+    if ct == "blindbox" or unit == "银狼LV.999盲盒":
+        return {"text": "银狼LV.999", "mark": "精确", "whole_owner": "银狼LV.999",
+                "why": "顶轴是【头号补给盲盒】的卡 → 整段归银狼LV.999", "parts": []}
     if ct == "enemy_buff":
         return {"text": "（不计入）", "mark": "不计入", "why": "敌方给我方的 buff 卡 → 不计入我方伤害",
                 "parts": []}
