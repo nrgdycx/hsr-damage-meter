@@ -263,61 +263,91 @@ class LiveEngine:
           * 两次真攻击背靠背：后段从**小数字重新开始**（累计值归零）→ 起点远低于前段峰值 ✗ 不并。
         老判据拿**峰值**比，于是"小攻击(5万) 之后跟一次大攻击(1万涨到30万)"会被并掉 5万 → 少算。
         """
-        if len(self.events) < 2:
-            return
-        a = self.events[-2]
-        b = self.events[-1]
-        try:
-            if a.get("status") == "non_ally" or b.get("status") == "non_ally":
+        # ⚠️ 用 `while`：一串分段（stage1/stage2/stage3 + 收尾）要**一次调用全收进来**。
+        #    原来只比较最后两段、且每次 append 只检查一次 → 三段的串会剩下第一段 → 重复计数。
+        while len(self.events) >= 2:
+            a = self.events[-2]
+            b = self.events[-1]
+            try:
+                if a.get("status") == "non_ally" or b.get("status") == "non_ally":
+                    return
+                oa, ob = (a.get("owner") or ""), (b.get("owner") or "")
+                if not oa or oa != ob:
+                    return
+                da = int(a.get("damage_max") or 0)
+                db = int(b.get("damage_max") or 0)
+                if da < self.MERGE_FLOOR or db < self.MERGE_FLOOR:
+                    return
+                ta = float(a.get("t_last") or a.get("t_anchor") or 0.0)
+                tb = float(b.get("t_first") or b.get("t_anchor") or 0.0)
+                te_b = float(b.get("t_last") or b.get("t_anchor") or tb)
+                if tb - ta > self.MERGE_GAP:
+                    return
+                close = self._tail_is_close(b)
+                if close is None:
+                    # ── 老数据（没有字形尺寸信息：回放/冻结 CSV）→ **维持原数值判据** ──
+                    if db < da:
+                        return
+                    # 后段必须是"接着前段的数继续涨"，不是"从小数字重新开始"。
+                    # ⚠️ 2026-10-05 三轮：二轮那条"扫 a→b 之间有没有小读数"的归零检测
+                    #    扫得太宽（真实强普段间本就常夹小数字）→ 把该并的分段全挡回去
+                    #    → 用户实测"重复计数更严重"。现在只看**后段自己的第一条原始读数**。
+                    b_first = None
+                    for r in self.rows:
+                        if not (tb - 1e-9 <= r["t"] <= te_b + 1e-9) or r.get("grade") != "raw":
+                            continue
+                        try:
+                            v = int(r.get("text") or 0)
+                        except (TypeError, ValueError):
+                            continue
+                        if v:
+                            b_first = v
+                            break
+                    if b_first is not None and b_first < da * self.MERGE_MIN_RATIO:
+                        return           # 后段是从小数重新涨起来的 → 那是新一击
+                elif not close:
+                    # ── 有尺寸信息（实时链路）→ **用户口径**：
+                    #    「那个数字图形变大才是结束」——**只有收尾那一段才是这次攻击的总伤**；
+                    #    它没收尾就说明还在分段累加/是另一次攻击 → **不并**。
+                    #    ⚠️ 这里**故意不再看数值涨跌**（用户明确说过"不是数值变大变小"）。
+                    return
+                elif self._tail_is_close(a) is True:
+                    # a 自己**已经收尾过**（= 它是一次完整攻击的总伤）→ 绝不能被后一次吞掉。
+                    # （实测：两次"各自收尾"的累加被并成一次 → 少记 30 万）
+                    return
+            except Exception:                            # noqa: BLE001
                 return
-            oa, ob = (a.get("owner") or ""), (b.get("owner") or "")
-            if not oa or oa != ob:
-                return
-            da = int(a.get("damage_max") or 0)
-            db = int(b.get("damage_max") or 0)
-            if da < self.MERGE_FLOOR or db < self.MERGE_FLOOR:
-                return
-            # 必须"还在涨"（跌了 = 新一击，累计值归零）
-            if db < da:
-                return
-            ta = float(a.get("t_last") or a.get("t_anchor") or 0.0)
-            tb = float(b.get("t_first") or b.get("t_anchor") or 0.0)
-            te_b = float(b.get("t_last") or b.get("t_anchor") or tb)
-            if tb - ta > self.MERGE_GAP:
-                return
-            # 后段必须是"接着前段的数继续涨"，不是"从小数字重新开始"。
-            # ⚠️⚠️ 2026-10-05 三轮（用户："**重复计数的问题更严重了**"）：
-            #    二轮我在这里加过一条"扫 a→b 之间有没有小读数 → 有就不并"的归零检测，
-            #    那条**扫得太宽**：真实强普的两段之间本来就常夹着小数字（盲盒自己的
-            #    欢愉伤害、碎片读数），于是它把**本该合并的分段全挡回去** → 重复计数更严重。
-            #    现在改成只看**后段自己的第一条原始读数**（不看 reject：小读数常被 R1b
-            #    「量级碎片」误剔），既保住了"两次真攻击不许并"，又不再误挡分段累加。
-            b_first = None
-            for r in self.rows:
-                if not (tb - 1e-9 <= r["t"] <= te_b + 1e-9) or r.get("grade") != "raw":
-                    continue
-                try:
-                    v = int(r.get("text") or 0)
-                except (TypeError, ValueError):
-                    continue
-                if v:
-                    b_first = v
-                    break
-            if b_first is not None and b_first < da * self.MERGE_MIN_RATIO:
-                return                       # 后段是从小数重新涨起来的 → 那是新一击
-        except Exception:                                # noqa: BLE001
-            return
-        # 合并：保留 b（更大的那个值），a 标掉并移除
-        b["merged_from"] = (b.get("merged_from") or []) + [a.get("event")]
-        b["merged_n"] = int(b.get("merged_n") or 0) + 1 + int(a.get("merged_n") or 0)
-        b["t_first"] = min(float(a.get("t_first") or tb),
-                           float(b.get("t_first") or tb))
-        b["issues"] = ",".join(filter(None, [b.get("issues"),
-                                             "merged_accum"]))
-        self.events.pop(-2)
-        for i, e in enumerate(self.events, 1):           # 事件号重排
-            e["event"] = i
-        self.n_merged = getattr(self, "n_merged", 0) + 1
+            # 合并：保留 b（**收尾的那一段**，它的值就是这次攻击的总伤），a 标掉并移除
+            b["merged_from"] = (b.get("merged_from") or []) + [a.get("event")]
+            b["merged_n"] = int(b.get("merged_n") or 0) + 1 + int(a.get("merged_n") or 0)
+            b["t_first"] = min(float(a.get("t_first") or tb),
+                               float(b.get("t_first") or tb))
+            b["issues"] = ",".join(filter(None, [b.get("issues"),
+                                                 "merged_accum"]))
+            self.events.pop(-2)
+            for i, e in enumerate(self.events, 1):       # 事件号重排
+                e["event"] = i
+            self.n_merged = getattr(self, "n_merged", 0) + 1
+
+    def _tail_is_close(self, b):
+        """`b` 这一段是不是**以"图形变大"收尾**（用户口径：数字图形变大才是结束）。
+
+        返回 `True`/`False`；**`None` = 这段数据里没有任何字形尺寸信息**
+        （回放/冻结 CSV、或该字体档案没登记 `big_h`）→ 交给原来的数值判据。
+
+        实现：取这一段里**最后一条可信读数**的 `big` 标记
+        （`mvp/reader.py` 按 `hud_profiles.big_h(profile)` 算好；实测像素体
+        常规字高 48~56、收尾 66~67，阈值 60）。
+        """
+        tf = float(b.get("t_first") or b.get("t_anchor") or 0.0)
+        tl = float(b.get("t_last") or b.get("t_anchor") or tf)
+        rows = [r for r in self.rows if tf - 1e-9 <= r["t"] <= tl + 1e-9]
+        if not any(r.get("big") is not None for r in rows):
+            return None
+        for r in reversed(rows):
+            if str(r.get("text") or "").strip() and r.get("grade") == "raw":
+                return bool(r.get("big"))
+        return False
 
     # ────────────────────────── 汇总 ──────────────────────────
     def totals(self):
@@ -508,8 +538,42 @@ def _selftest():
     _case("快速分段（对照）", [(0.0, "200000"), (0.2, "200000"), (0.4, ""), (0.6, ""),
           (0.8, "300000"), (1.0, "300000"), (1.2, ""), (1.4, ""),
           (1.6, "400000"), (1.8, "400000")] + _blanks(2.0, 14), 400000, 1)
+
+    # ── ⭐【用户口径】「那个数字图形变大才是结束」（2026-10-05 四轮）──
+    #    有了字形尺寸（`big`）就**只认尺寸**：收尾那一段才是这次攻击的总伤；
+    #    没收尾就不并（不再看数值涨跌）。没有尺寸信息时才退回上面的数值判据。
+    def _case_big(name, script, expect, want_events):
+        e = LiveEngine()
+        for item in script:
+            t, txt = item[0], item[1]
+            big = item[2] if len(item) > 2 else 0
+            r = feed(t, txt, len(txt), "遐蝶" if txt else "", "遐蝶" if txt else "")
+            r["h_med"] = 66.0 if big else 52.0
+            r["big"] = bool(big)
+            e.add(r)
+        e.flush()
+        _rows, total = e.totals()
+        assert total == expect, "%s：合计 %s，期望 %s" % (name, total, expect)
+        assert len(e.events) == want_events, "%s：事件 %d，期望 %d" % (
+            name, len(e.events), want_events)
+
+    # G 分段累加 + **收尾那一下变大** → 只记收尾的总数（即使段间隔 4s、段间有空白）
+    _case_big("尺寸口径：分段+收尾变大", [(0.0, "200000", 0), (0.2, "200000", 0)] +
+              _blanks(0.4, 18) + [(5.0, "300000", 0), (5.2, "300000", 0)] +
+              _blanks(5.4, 18) + [(10.0, "400000", 1), (10.2, "400000", 1)] +
+              _blanks(10.4, 14), 400000, 1)
+    # H 两次**各自收尾**的累加 → 必须记两次（不许跨过"变大"那一帧继续并）
+    _case_big("尺寸口径：两次各自收尾", [(0.0, "200000", 0), (0.2, "200000", 0),
+              (0.4, "300000", 1), (0.6, "300000", 1)] + _blanks(0.8, 16) +
+              [(5.0, "50000", 0), (5.2, "50000", 0), (5.4, "120000", 1),
+               (5.6, "120000", 1)] + _blanks(5.8, 14), 420000, 2)
+    # I 都在涨但**没有一帧变大**（= 还在分段累加，没收尾）→ 不许并成一次
+    _case_big("尺寸口径：没变大就不并", [(0.0, "200000", 0), (0.2, "200000", 0)] +
+              _blanks(0.4, 18) + [(5.0, "300000", 0), (5.2, "300000", 0)] +
+              _blanks(5.4, 14), 500000, 2)
     print("engine 自检通过：口径=只算 status=ok；判不出来不进合计、不猜；"
-          "多段累加慢也不重复计数、两次真攻击不被吃掉")
+          "多段累加慢也不重复计数、两次真攻击不被吃掉；"
+          "【用户口径】图形变大才收尾（变大才并、没收尾不并、两次各自收尾记两次）")
     return 0
 
 

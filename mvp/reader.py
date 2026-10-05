@@ -166,10 +166,20 @@ class Perceiver:
             nbad += 1 if bad else 0
         return "".join(chars), mins, len(gs), nbad
 
+    def _glyph_h_med(self, gs):
+        """字形高度中位数（px）。**用户口径的"收尾"信号**：数字图形变大才是结束。
+
+        见 `hud_profiles.PROFILES["yinlang999"]["big_h"]` 与 `mvp/engine.py::_tail_is_close`。
+        实测（15 帧真值）：常规 48~56，收尾 66~67。
+        """
+        hs = sorted(int(h) for _v, _w, h in (gs or []) if h)
+        return float(hs[len(hs) // 2]) if hs else 0.0
+
     def read_hud_frame(self, frame_rgb, profile=None, strict=False):
         """整帧（RGB, int16/uint8）→ HUD 读数。走**动态定位**，与离线扫描同口径。"""
         prof = profile or self.profile
         gs = self.HP.glyphs(prof, frame_rgb, strict=strict)
+        self.last_h_med = self._glyph_h_med(gs)
         return self._classify_glyphs(gs, prof)
 
     def read_hud_region(self, region_rgb, top, left, bar_rows=None, profile=None, strict=False):
@@ -182,6 +192,7 @@ class Perceiver:
         prof = profile or self.profile
         gs = self.HP.glyphs_cropped(prof, region_rgb, top, left, bar_rows=bar_rows,
                                     strict=strict)
+        self.last_h_med = self._glyph_h_med(gs)
         text, conf, n, nbad = self._classify_glyphs(gs, prof)
         if self.span_guard and text and span_guard_hit(region_rgb, gs):
             return "?" * max(1, n), conf, n, max(1, nbad), text
@@ -426,6 +437,20 @@ class Perceiver:
                                 "profile": alt, "profile_src": "fallback",
                                 "alt_region": tag,
                                 "alt_variant": "strict" if strict else "raw"})
+        # ⭐ 2026-10-05【用户口径】「**那个数字图形变大才是结束**」——
+        #    把这一帧的**字形高度**带出去，让引擎用它判"这次攻击是否收尾"
+        #    （`mvp/engine.py::_tail_is_close`）。**这是加法**：
+        #    * 档案没登记 `big_h`（如常规辉光体）→ `big` 留 `None` → 引擎退回原来的数值判据；
+        #    * 老 CSV/回放数据没有这两个字段 → 同样退回原判据（既有验收不变）。
+        #    实测（像素体 15 帧真值）：常规字高 48~56、收尾 66~67，阈值 60 分得很开。
+        try:
+            import hud_profiles as _HP
+            _thr = _HP.big_h(row.get("profile") or self.profile)
+            _hm = float(getattr(self, "last_h_med", 0.0) or 0.0)
+            row["h_med"] = round(_hm, 1)
+            row["big"] = (bool(_hm >= _thr) if _thr else None)
+        except Exception:                                 # noqa: BLE001
+            pass
         row["ms"] = {"hud": (t1 - t0) * 1000.0, "axis": (t2 - t1) * 1000.0}
         return row
 
