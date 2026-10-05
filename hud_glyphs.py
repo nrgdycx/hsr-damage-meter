@@ -299,6 +299,11 @@ CYAN_GAP = 24          # 实测相邻字形空隙 5~20（常规字体规则是 2
 CYAN_H_MIN = 40        # 实测真字形高 49~94；碎片高 8~34
 CYAN_MASS_MIN = 300    # 实测真字形质量 600~2100；碎片 1~170
 CYAN_ADVANCE = 59.0    # 实测字距（t=49: 相邻字形起点 2519/2578/2638/2696/2755/2814）
+# ── 2026-10-05 新增（都是 线2 `hud_read_team2.extract_cyan2` 实测出来的数）──
+CYAN_H_MAX = 118       # 超过它就不是这套字形（录屏2 t=200 的满屏蓝光块 h=148 → 必须拒）
+CYAN_ADV_RATIO = 1.2   # 字距 ≈ 单字宽 × 1.2（t=100 实测 52→57；t=238 实测 45.5→60）
+CYAN_SPLIT_MIN_RATIO = 1.6   # 只有 w ≥ 1.6×字距 才敢拆（单字最宽 71 = 1.2×adv → 永不误拆）
+CYAN_EDGE_GUARD = 3    # 最左段贴住区域左界 → 框在切一个比框还大的东西（满屏特效）→ 不认
 
 
 def _split_wide_off(runs):
@@ -319,29 +324,54 @@ def _split_wide_off(runs):
       · 拆错的代价 = 在中间插一个假字 → **它右边所有位的标签全部错位**，而且会被当成训练样本。
     后者危险得多。所以现在把单字宽度上限放宽到 CYAN_W_MAX=80 来"接住"偏宽的单字，
     而宽于 80 的块（真粘连）直接交给上层判"这段不可信"（见 train_pixel_A 的右缘检查）。
+
+    ⚠️ 2026-10-05 补充：上面那次教训**不是"不能拆"，而是"切点判据不能只看列质量"**。
+    `_split_runs_conservative()` 换了两条更严的门：
+      ① **只有 w ≥ 1.6×字距 才拆**（单字最宽 71 = 1.2×字距 → 永远不会被误拆）；
+      ② 切点用**更严的亮青掩膜**（`_cyan_narrow_mask`）找"局部墨最少的列"，
+         单字内部那道细斜线在严掩膜下会整列消失 → 不再在字中间下刀。
     """
     return runs
 
 
-def cyan_mask(c):
-    """像素字体的掩膜（青绿填充）。"""
+# ══════════════════════════════════════════════════════════════════════════
+# 2026-10-05：把 线2（`hud_read_team2.extract_cyan2`）里**能用的**那套分割移植进来。
+#
+# 为什么必须移植（实测三张用户确认真值的像素帧，实时链路 vs 线2）：
+#   t=100 `506286`：实时 **3 段**（应 6）        ／ 线2 **6 段** ✓
+#   t=200 `2052321`：实时被**蓝云**连成 1~7 段烂块 ／ 线2 **7 段** ✓
+#   t=238 `123692`：实时 6 段但**字高被截顶**    ／ 线2 6 段 ✓
+# 差别只有四件事，这里逐条照搬（**掩膜口径不动**：`strict=False` 仍走 `cyan_mask`，
+# 与训练分布一致；训练/推理因此仍然同源）：
+#   ① 列分割用**收紧掩膜**（`G-B > 8`）挡住整片蓝云背景（t=200）；
+#   ② 整串钉在**同一条行带**上（`_dominant_row_band`）—— 数字下方那条 UI 条带
+#      会让"每段各自取最大行块"选错（t=100 字高 51→95，字形图变成条带）；
+#   ③ 粘连宽块**保守拆分**（`_split_runs_conservative`，见上面 `_split_wide_off` 的补充）；
+#   ④ 拆不动的超宽块**占位**（返回 `gray=None`）而不是静默丢弃 —— 下游必须出 `?`，
+#      于是这一帧会被判"待复核"而不是给出一个**位数偏少的错数**。
+# ══════════════════════════════════════════════════════════════════════════
+
+def _cyan_seg_mask(c):
+    """**列分割**用的青色掩膜：在 `cyan_mask` 上收紧一条 `G > B`。
+
+    为什么必须收紧：录屏2 `t=200` 的整幅画面是一片亮蓝云（背景实测 (168,210,253)：
+    `G=210>195`、`G-R=42>25`、`G-B=-43>-45` → **穿过了原掩膜**）→ 分割出一个 734px 宽的
+    巨块，整帧读数报废。数字的填充色实测是 (162,255,222)（`G-B=+33`），所以加一条
+    `G-B > 8` 就能既保住数字、又挡掉蓝背景。
+    ⚠️ 取字形像素仍可用原口径（`cyan_mask` + 填洞），保证与训练时的字形分布一致。
+    """
     R, G, B = c[:, :, 0], c[:, :, 1], c[:, :, 2]
-    return (G > 195) & ((G - R) > 25) & ((G - B) > -45)
+    return (G > 195) & ((G - R) > 25) & ((G - B) > 8)
 
 
-def extract_cyan(region, top=0, left=0):
-    """
-    像素字体（银狼999 强普那种）的字形提取。
+def _cyan_narrow_mask(c):
+    """更严的青色掩膜：只留亮青核心。用于**找切点**（越大越容易分开相邻字）。"""
+    R, G, B = c[:, :, 0], c[:, :, 1], c[:, :, 2]
+    return ((G - R) > 60) & (G > 200)
 
-    返回 [(gray float32 GH×GW, 像素宽 w, 像素高 h), ...]，右对齐链过滤，语义同 extract。
-    字形灰度用**填洞后的二值形状**（该字体是实心方块字，内部偶有暗像素）——
-    比给"青绿强度"更干净，也避免描边/辉光干扰。
-    """
-    from PIL import Image
-    region = np.asarray(region, dtype=np.int16)
-    m = cyan_mask(region)
-    m_fill = _fill_holes(m)
-    col = m.any(axis=0)
+
+def _runs_from_col(col, merge_px=3):
+    """列投影 → 连通列段（间隔 < merge_px 的并起来）。"""
     runs, s = [], None
     for x in range(len(col)):
         if col[x] and s is None:
@@ -353,11 +383,104 @@ def extract_cyan(region, top=0, left=0):
         runs.append([s, len(col) - 1])
     merged = []
     for r in runs:
-        if merged and r[0] - merged[-1][1] - 1 < 3:
+        if merged and r[0] - merged[-1][1] - 1 < merge_px:
             merged[-1][1] = r[1]
         else:
             merged.append(r)
-    merged = _split_wide_off(merged)         # 见下方说明：**不拆**，只做保留
+    return merged
+
+
+def _row_blocks(row_any):
+    """把"某一列范围里有墨的行"切成连通块 → [[r0, r1], ...]。"""
+    blocks, s = [], None
+    for y in range(len(row_any)):
+        if row_any[y] and s is None:
+            s = y
+        elif not row_any[y] and s is not None:
+            blocks.append([s, y - 1])
+            s = None
+    if s is not None:
+        blocks.append([s, len(row_any) - 1])
+    return blocks
+
+
+def _dominant_row_band(m, xa, xb):
+    """整串文字所在的行带 = 该 x 范围内**质量最大**的行连通块。
+
+    为什么需要它（t=100 实测）：像素体数字的下方还有一条 UI 条带（区域行 111~147），
+    按"每个列段各自取最大行块"会让中间那一段选中下方条带，字高从 51 变成 95、
+    字形图变成条带 → 读错/丢字。整串文字一定是**同一行带**，用全局行带就把它钉死了。
+    """
+    row_any = m[:, xa:xb + 1].any(axis=1)
+    blocks = _row_blocks(row_any)
+    if not blocks:
+        return None
+    return max(blocks, key=lambda b: int(m[b[0]:b[1] + 1, xa:xb + 1].sum()))
+
+
+def _split_runs_conservative(runs, m_narrow, adv, min_ratio=None):
+    """把**明显**是多字粘连的宽块切开（切点 = 严掩膜下局部墨最少的列）。
+
+    与已停用的 `_split_wide_off` 的区别（见它的补充说明）：门槛更严、切点更可靠。
+    """
+    min_ratio = CYAN_SPLIT_MIN_RATIO if min_ratio is None else float(min_ratio)
+    out = []
+    for xa, xb in runs:
+        w = xb - xa + 1
+        k = int(round(w / max(1.0, adv)))
+        if k < 2 or w < min_ratio * adv:
+            out.append([xa, xb])
+            continue
+        cuts = []
+        for i in range(1, k):
+            ideal = xa + int(round(i * w / float(k)))
+            half = max(2, int(round(0.25 * w / k)))
+            lo, hi = max(xa + 2, ideal - half), min(xb - 2, ideal + half)
+            if hi <= lo:
+                cuts.append(ideal)
+                continue
+            col = m_narrow[:, lo:hi + 1].sum(axis=0)
+            cuts.append(lo + int(np.argmin(col)))
+        # 去重后按顺序切；切点不够就退回等分点 —— 保证**刚好切成 k 段**
+        cuts = sorted(set(c for c in cuts if xa + 2 < c < xb - 2))
+        if len(cuts) < k - 1:
+            cuts = sorted(set([xa + int(round(i * w / float(k))) for i in range(1, k)]))
+        prev = xa
+        for cc in cuts:
+            out.append([prev, cc - 1])
+            prev = cc
+        out.append([prev, xb])
+    return out
+
+
+def extract_cyan(region, top=0, left=0, strict=False):
+    """
+    像素字体（银狼999 强普那种）的字形提取。
+
+    返回 [(gray float32 GH×GW, 像素宽 w, 像素高 h), ...]，右对齐链过滤，语义同 extract。
+    **`gray is None` = 占位**：那一块是拆不动的超宽粘连块 → 调用方必须出 `?`
+    （宁可让这一帧"待复核"，也不能给出一个**位数偏少**的错数）。
+
+    `strict=True` 用收紧掩膜（挡蓝云背景，t=200 那种画面）；
+    默认 `strict=False` 用 A 线原掩膜（与训练分布一致）。
+    字形灰度用**填洞后的二值形状**（该字体是实心方块字，内部偶有暗像素）——
+    比给"青绿强度"更干净，也避免描边/辉光干扰。
+    """
+    from PIL import Image
+    c = np.asarray(region, dtype=np.int16)
+    m_seg = _cyan_seg_mask(c) if strict else cyan_mask(c)
+    m_fill = _fill_holes(m_seg)
+    merged = _runs_from_col(m_seg.any(axis=0))
+    if not merged:
+        return []
+
+    # 字距估计：用"看起来像单字"的段宽中位数 × adv_ratio
+    single = [r[1] - r[0] + 1 for r in merged
+              if CYAN_W_MAX * 0.5 <= (r[1] - r[0] + 1) <= CYAN_W_MAX]
+    adv = float(np.median(single)) * CYAN_ADV_RATIO if single else float(CYAN_ADVANCE)
+    adv = max(CYAN_ADVANCE * 0.7, min(CYAN_ADVANCE * 1.6, adv))
+    merged = _split_runs_conservative(merged, _cyan_narrow_mask(c), adv)
+
     # 链式连续性：从最右字形往左串（挡住左边的特效/UI 亮块）
     chain = []
     for r in reversed(merged):
@@ -368,21 +491,43 @@ def extract_cyan(region, top=0, left=0):
         else:
             break
     merged = list(reversed(chain))
+    # 满屏特效块（如 t=200 的整片蓝光）会把整段连成一个巨块：贴住区域左界
+    # = 说明框在切一块比框还大的东西，不可能是"总伤害数字" → 整帧不认。
+    if merged and merged[0][0] <= CYAN_EDGE_GUARD:
+        return []
 
+    band = _dominant_row_band(m_fill, merged[0][0], merged[-1][1]) if merged else None
     out = []
     for xa, xb in merged:
-        sub = m_fill[:, xa:xb + 1]
-        rows = np.where(sub.any(axis=1))[0]
+        if band is None:
+            break
+        b0, b1 = band
+        sub_band = m_fill[b0:b1 + 1, xa:xb + 1]
+        rows = np.where(sub_band.any(axis=1))[0]
         if len(rows) == 0:
             continue
+        r0, r1 = int(rows[0]) + b0, int(rows[-1]) + b0
         w = xb - xa + 1
-        h = int(rows[-1] - rows[0] + 1)
-        mass = int(sub.sum())
-        if w > CYAN_W_MAX or h < CYAN_H_MIN or mass < CYAN_MASS_MIN:
+        h = r1 - r0 + 1
+        mass = int(m_fill[r0:r1 + 1, xa:xb + 1].sum())
+        if w > CYAN_W_MAX:
+            # 拆不动/拆了还是太宽 → **占位**（下游出 '?'），不要静默丢弃
+            out.append((None, w, int(h)))
+            continue
+        if h < CYAN_H_MIN or h > CYAN_H_MAX or mass < CYAN_MASS_MIN:
             continue
         if w < max(6, int(0.20 * h)):
             continue
-        g = sub[rows[0]:rows[-1] + 1].astype(np.float32)
+        sub = m_fill[r0:r1 + 1, xa:xb + 1]
+        g = sub.astype(np.float32)
         img = Image.fromarray((g * 255).astype(np.uint8)).resize((GW, GH), Image.BILINEAR)
-        out.append((np.asarray(img, dtype=np.float32) / 255.0, w, h))
+        out.append((np.asarray(img, dtype=np.float32) / 255.0, w, int(h)))
     return out
+
+
+def cyan_mask(c):
+    """像素字体的掩膜（青绿填充）。⚠️ 它是**取字形像素**的口径（与训练分布一致）；
+    列分割另有收紧口径 `_cyan_seg_mask`（挡蓝云背景），见 `extract_cyan`。"""
+    R, G, B = c[:, :, 0], c[:, :, 1], c[:, :, 2]
+    return (G > 195) & ((G - R) > 25) & ((G - B) > -45)
+

@@ -11,13 +11,16 @@
 """
 # [P3 整理] 原路径：train_pixel_A.py（已移入 tools/，功能见 tools/README.md）
 import os as _os, sys as _sys
-_sys.path.insert(0, _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))))
-from ffmpeg_path import require_ffmpeg as _req_ff
-import os as _os, sys as _sys  # noqa: E401  [P3] 让脚本在 tools/ 里也能找到仓库根（见 tools/README.md）
 _t = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))   # .../<仓库>/tools
 if _os.path.isdir(_t) and _t not in _sys.path:
     _sys.path.insert(0, _t)
 from tools_bootstrap import *  # noqa: E402,F401,F403
+# ⚠️ 2026-10-05 修：`from ffmpeg_path import ...` **必须放在 bootstrap 之后**。
+#    `tools_bootstrap` 才会把**仓库根**插进 sys.path（见 tools/README.md §3）；
+#    放在它前面时 `<仓库>/tools` 是当前插入项，而 `ffmpeg_path.py` 在仓库根 →
+#    `ModuleNotFoundError: No module named 'ffmpeg_path'`（本脚本自 P3 搬家后就跑不起来）。
+#    同类隐患还有十几个 tools/ 脚本，见 docs/交接_待办与最新状态.md 的"已知坏路径"。
+from ffmpeg_path import require_ffmpeg as _req_ff  # noqa: E402
 import json
 import os
 import subprocess
@@ -87,6 +90,11 @@ def build(verbose=True):
         if len(gs) == 0 or len(gs) > len(val) or len(gs) < len(val) - 1:
             rep.append("t=%-6s %-8s 切出 %d 段 / %d 位 → 弃用" % (t, val, len(gs), len(val)))
             continue
+        # ⚠️ 2026-10-05：`extract_cyan` 现在会给"拆不动的超宽粘连块"**占位**（gray=None）。
+        # 占位块的位数是估计值 → 靠右对齐贴标签会**整体错位** → 这一帧整帧弃用（宁可不训）。
+        if any(g[0] is None for g in gs):
+            rep.append("t=%-6s %-8s 含占位块（拆不动的粘连块）→ 弃用，避免标签错位" % (t, val))
+            continue
         lab = val[-len(gs):]
         for i, (v, w, h) in enumerate(gs):
             X.append(v)
@@ -155,6 +163,9 @@ def main():
         gs = HP.glyphs("yinlang999", a)
         if not gs:
             print("   t=%-7s 切不出字形" % t)
+            continue
+        if any(g[0] is None for g in gs):
+            print("   t=%-7s 含占位块（拆不动的粘连块）→ 这一帧不判（应是待复核）" % t)
             continue
         x = torch.tensor(np.stack([v for v, _, _ in gs])[:, None], dtype=torch.float32)
         with torch.no_grad():

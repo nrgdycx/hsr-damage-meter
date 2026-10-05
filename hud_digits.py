@@ -192,30 +192,38 @@ def check_model_freshness(onnx_path=MODEL_ONNX, sess=None):
     import hashlib
     import json
 
-    pt = _res("out/digit_cnn.pt")
+    # ⚠️⚠️ 2026-10-05 修：`.pt` 与探针必须**按档案**取，不能永远用默认字体那一份。
+    #   原来写死 `pt = out/digit_cnn.pt`、`PROBE = out/digit_cnn.probe.npz`，于是给**像素体**
+    #   （`yinlang999`）做检查时，拿它的 ONNX 去比**默认字体**的探针 → 必然报
+    #   "ONNX 与 .pt 不等价 5/16"这种**误报**（实测把一轮排查带偏过）。
+    #   现在：`out/digit_cnn_yinlang999.onnx` → 比同前缀的 `.pt`；探针取同前缀的 `.probe.npz`
+    #   （默认档恰好就是 `out/digit_cnn.probe.npz`，行为不变）。某档案没有探针时只做时间检查。
+    stem = onnx_path[:-5] if onnx_path.lower().endswith(".onnx") else onnx_path
+    pt = stem + ".pt"
+    probe = stem + ".probe.npz"
     meta_path = onnx_path + ".meta.json"
     if not os.path.exists(pt) or not os.path.exists(onnx_path):
         return True, "缺少 %s 或 %s，跳过新鲜度检查" % (os.path.basename(pt), os.path.basename(onnx_path))
     pt_m, onnx_m = os.path.getmtime(pt), os.path.getmtime(onnx_path)
     if pt_m > onnx_m + 2:      # 2s 容差，避免同一次训练里保存顺序造成的误报
         return False, ("%s 比 %s 新 %.0f 秒：实时端在用旧模型！"
-                       "跑 `python export_onnx_B.py` 重新导出。"
+                       "跑 `python tools/hud/export_onnx.py` 重新导出。"
                        % (os.path.basename(pt), os.path.basename(onnx_path), pt_m - onnx_m))
 
     # ── 探针比对：最能说明问题的一步 ──
-    if sess is not None and os.path.exists(PROBE):
+    if sess is not None and os.path.exists(probe):
         try:
-            d = np.load(PROBE)
+            d = np.load(probe)
             x, y = d["X"].astype(np.float32), d["Y"]
             got = sess.run(None, {sess.get_inputs()[0].name: x})[0]
             diff = float(np.abs(got - y).max())
             if not np.array_equal(got.argmax(1), y.argmax(1)):
                 bad = int((got.argmax(1) != y.argmax(1)).sum())
                 return False, ("ONNX 与 .pt **不等价**：%d/%d 个探针字形 argmax 不一致（可能是换了导出方式或权重）；"
-                               "跑 `python export_onnx_B.py` 重新导出。" % (bad, len(y)))
+                               "跑 `python tools/hud/export_onnx.py` 重新导出。" % (bad, len(y)))
             if diff > 0.1:
                 return False, ("ONNX 与 .pt 数值偏差过大（最大 logit 差 %.3f）：别用这份 ONNX 做实时推理；"
-                               "跑 `python export_onnx_B.py` 重新导出。" % diff)
+                               "跑 `python tools/hud/export_onnx.py` 重新导出。" % diff)
             return True, ("ONNX 与 .pt 等价（%d 个探针字形 argmax 全一致，最大 logit 差 %.4f）"
                           % (len(y), diff))
         except Exception as e:
@@ -230,10 +238,12 @@ def check_model_freshness(onnx_path=MODEL_ONNX, sess=None):
                 for b in iter(lambda: f.read(1 << 20), b""):
                     h.update(b)
             if meta.get("pt_sha256") == h.hexdigest():
-                return True, "ONNX 与 .pt 同源（权重哈希已记录；没有探针，未做数值比对）"
-            return True, ("ONNX 比 .pt 新，但不是 export_onnx_B.py 导出的；"
-                          "要严格确认请跑 `python export_onnx_B.py --check`")
-        return True, "ONNX 比 .pt 新（没有哈希记录）；要严格确认请跑 `python export_onnx_B.py --check`"
+                return True, ("ONNX 与 .pt 同源（权重哈希已记录；**%s 这份没有探针，未做数值比对**）"
+                              % os.path.basename(probe))
+            return True, ("ONNX 比 .pt 新，但不是 export_onnx 导出的；"
+                          "要严格确认请补一份同名探针 %s" % os.path.basename(probe))
+        return True, ("ONNX 比 .pt 新（没有哈希记录、**%s 这份没有探针**）→ 只做了时间检查；"
+                      "要严格确认请补一份同名探针" % os.path.basename(probe))
     except Exception as e:
         return True, "新鲜度检查出错（按时间看不过期）：%r" % (e,)
 

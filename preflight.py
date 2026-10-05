@@ -24,6 +24,9 @@ MUST = [
     ("HUD 像素字体模型",      "out/digit_cnn_yinlang999.onnx"),
     ("HUD 像素字体外部权重",   "out/digit_cnn_yinlang999.onnx.data"),
     ("ONNX/PT 等价性探针",    "out/digit_cnn.probe.npz"),
+    # ⭐ 2026-10-05：像素体**也要有自己的探针** —— 原来只有常规字体那份，
+    #    于是给像素体做 ONNX/.pt 检查时拿的是**别人的探针** → 必然误报"不等价"。
+    ("像素字体等价性探针",     "out/digit_cnn_yinlang999.probe.npz"),
     ("行动轴模板库（共享）",   "out/axis_top_bank_E.npz"),
     ("行动轴模板库（录屏2）",  "out/axis_top_bank_E2.npz"),
     ("左侧标记模板库",        "out/axis_marker_bank_E.npz"),

@@ -35,6 +35,11 @@ RESOURCES = (
     "out/digit_cnn.onnx",           # HUD 数字分类器（onnxruntime）
     "out/digit_cnn.onnx.data",      # ↑ 的外部权重文件（必须与 .onnx 同目录）
     "out/digit_cnn.probe.npz",      # 新鲜度探针（ONNX 与 .pt 等价性）
+    # ⭐ 2026-10-05：像素体（银狼999 强普）那套**必须一起进包**，否则实时兜底要么缺模型、
+    #    要么没有等价性探针（`check_model_freshness` 会拿默认字体的探针去比 → 必然误报）。
+    "out/digit_cnn_yinlang999.onnx",
+    "out/digit_cnn_yinlang999.onnx.data",
+    "out/digit_cnn_yinlang999.probe.npz",
     "out/axis_top_bank_E.npz",      # 行动轴单位模板库（录屏1 的 8 个单位）
     "out/axis_top_bank_E2.npz",     # 行动轴单位模板库（录屏2 的 4 个单位）
     "out/axis_marker_bank_E.npz",   # 左侧标记模板库（判敌我 / 行动类型）
@@ -42,6 +47,11 @@ RESOURCES = (
     # **真实一帧的端到端读数断言**（框选择 + 掩膜 + 分割 + ONNX 分类全链），
     # 而不是只拿随机字形证明"能推理"。真值与来历见 out/real_frames/README.md。
     "out/real_frames/live_2880x1800_73431_q88.jpg",
+    # ⭐ 2026-10-05：像素体（狼尊强普）的两张真值 HUD 区域（770×148，各 ~55KB）。
+    #    带它们进包是为了让 exe 自检能对**像素体读数**做端到端断言 ——
+    #    这一路连坏过三轮（喂错区域 / 蓝云穿掩膜 / 几何闸误杀），"能加载模型"完全看不出来。
+    "out/real_frames/pixel_t100_506286.png",
+    "out/real_frames/pixel_t200_2052321.png",
 )
 
 _CACHE = {}

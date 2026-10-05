@@ -128,43 +128,60 @@ class Perceiver:
         return r
 
     def _classify_glyphs(self, gs, profile=None):
-        """字形 → (读数串, 最低置信度, 字形数, 坏字形数)。几何守门与离线同口径。"""
+        """字形 → (读数串, 最低置信度, 字形数, 坏字形数)。几何守门与离线同口径。
+
+        ⚠️ 像素体（`hud_glyphs.extract_cyan`）会用 `(None, w, h)` 表示
+        **拆不动的超宽粘连块（占位）**：那一位直接记 `?` —— 这一帧就是"待复核"，
+        **绝不按"少一位"给结论**（宁可漏，不要错）。
+        """
         prof = profile or self.profile
         if not gs:
             return "", 0.0, 0, 0
+        sub = [g for g in gs if g[0] is not None]
+        if not sub:
+            return "?" * len(gs), 0.0, len(gs), len(gs)
         rd = self._reader_for(prof)
         if rd is not None:
-            res = rd.classify(gs)
+            res = rd.classify(sub)
         else:
             import torch
-            x = torch.tensor(np.stack([v for v, _, _ in gs])[:, None], dtype=torch.float32)
+            x = torch.tensor(np.stack([v for v, _, _ in sub])[:, None], dtype=torch.float32)
             with torch.no_grad():
                 p = torch.softmax(self._model(x), 1)
             cf, pd = p.max(1)
             res = [(int(d), float(c)) for d, c in zip(pd.tolist(), cf.tolist())]
         chars, mins, nbad = [], 1.0, 0
-        for (v, w, h), (d, c) in zip(gs, res):
+        it = iter(res)
+        for v, w, h in gs:
+            if v is None:                                   # 占位：拆不动的粘连块
+                chars.append("?")
+                mins = 0.0
+                nbad += 1
+                continue
+            d, c = next(it)
             ok, _ = self.HP.geom_ok(prof, w, h)
             bad = (not ok) or c < self.conf_min
             chars.append("?" if bad else str(d))
             mins = min(mins, c)
             nbad += 1 if bad else 0
-        return "".join(chars), mins, len(res), nbad
+        return "".join(chars), mins, len(gs), nbad
 
-    def read_hud_frame(self, frame_rgb, profile=None):
+    def read_hud_frame(self, frame_rgb, profile=None, strict=False):
         """整帧（RGB, int16/uint8）→ HUD 读数。走**动态定位**，与离线扫描同口径。"""
         prof = profile or self.profile
-        gs = self.HP.glyphs(prof, frame_rgb)
+        gs = self.HP.glyphs(prof, frame_rgb, strict=strict)
         return self._classify_glyphs(gs, prof)
 
-    def read_hud_region(self, region_rgb, top, left, bar_rows=None, profile=None):
+    def read_hud_region(self, region_rgb, top, left, bar_rows=None, profile=None, strict=False):
         """已裁好的 HUD 区域（RGB）→ (读数串, 最低置信, 字形数, 坏字形数, 可疑原值)。
 
+        `strict`：只对**像素体**有意义（收紧掩膜挡蓝云背景，见 `hud_glyphs.extract_cyan`）。
         `span_guard=True` 时多一道"段宽/墨迹跨度"闸（见模块级 `span_guard_hit`）：
         命中就**不把那个值交出去**（返回 `'?'*n`），原值放在第 5 个返回值里供诊断。
         """
         prof = profile or self.profile
-        gs = self.HP.glyphs_cropped(prof, region_rgb, top, left, bar_rows=bar_rows)
+        gs = self.HP.glyphs_cropped(prof, region_rgb, top, left, bar_rows=bar_rows,
+                                    strict=strict)
         text, conf, n, nbad = self._classify_glyphs(gs, prof)
         if self.span_guard and text and span_guard_hit(region_rgb, gs):
             return "?" * max(1, n), conf, n, max(1, nbad), text
@@ -311,7 +328,7 @@ class Perceiver:
     # ────────────────────────── 组合 ──────────────────────────
     def read(self, t, frame_rgb=None, region_rgb=None, top=None, left=None,
              bar_rows=None, axis_rgb=None, axis_geom=None, axis_offset=(0, 0),
-             read_axis=True, want_lm=False):
+             read_axis=True, want_lm=False, alt_region_rgb=None, alt_top=None, alt_left=None):
         """一帧 → 一条读数。`frame_rgb` 与 `region_rgb` 二选一。
 
         frame_rgb : 整帧（RGB）—— 离线/回放用（HUD 走动态定位）
@@ -319,6 +336,8 @@ class Perceiver:
         axis_rgb  : 行动轴图（RGB）；read_axis=False 或缺省时不读（保持空）
         axis_geom : 行动轴几何；整帧时给 None，裁剪区域时给 local_axis_geom() 的结果
         axis_offset: 轴区域在原帧里的左上角（实时 x60 → 传 (60, 0)）；T2 认脸要用
+        alt_region_rgb/alt_top/alt_left: **像素体档案自己那块区域**（见 `pixel_region_for`）。
+        只给"常规档读不出来时的兜底"用；不给就退回用 `region_rgb`（会截顶，见那里的说明）。
         """
         row = new_row(t)
         t0 = time.perf_counter()
@@ -366,18 +385,47 @@ class Perceiver:
                 self._retry_alt and not text and nbad == 0):
             alt = self._alt_profile
             if alt and alt != "default":
-                try:
-                    if region_rgb is not None:
-                        t2s, c2, n2, b2, _ = self.read_hud_region(
-                            region_rgb, top, left, bar_rows, profile=alt)
-                    else:
-                        t2s, c2, n2, b2 = self.read_hud_frame(frame_rgb, profile=alt)
-                    # 只有"切出了字形 且 没有坏字形"才采信（宁可漏，不要错）
-                    if t2s and "?" not in t2s and b2 == 0 and n2 > 0:
-                        row.update({"text": t2s, "n": n2, "conf": round(c2, 3),
-                                    "nbad": b2, "profile": alt, "profile_src": "fallback"})
-                except Exception as e:                      # noqa: BLE001
-                    row["alt_err"] = str(e)[:80]
+                # ⚠️⚠️ 2026-10-05：像素体要**它自己那块区域**，而且**两个口径都要试**。
+                #
+                # ① 区域：默认框（常规字体/墨迹定位）只有 ~80px 高（y 285~365），
+                #    而像素数字实测在 **y 224~341** → 字顶被切掉，字形图与训练分布不符
+                #    （实测 t=45 读成 `5?576`、t=238 读成 `1?3692`）；
+                #    文件/回放那条路喂的是整帧，档案框自己就是对的，所以两条都留着。
+                # ② 口径：`strict`（收紧掩膜 G-B>8）挡得住录屏2 t=200 那种**整片蓝云**背景
+                #    （原口径在那帧被糊成 0 段 / 1 个巨块），但它的字形边缘略瘦；
+                #    原口径与训练分布一致，是首选。⇒ 先原口径，不干净再试收紧口径。
+                #    采信条件不变：**切出字形 且 没有坏字形 且 没有 '?'**（宁可漏，不要错）。
+                best = None
+                cands = []
+                if alt_region_rgb is not None:
+                    cands.append(("pixel", alt_region_rgb, alt_top, alt_left))
+                if region_rgb is not None:
+                    cands.append(("hud", region_rgb, top, left))
+                if not cands:
+                    cands.append(("frame", None, None, None))
+                for tag, reg, rtop, rleft in cands:
+                    for strict in (False, True):
+                        try:
+                            if reg is not None:
+                                t2s, c2, n2, b2, _ = self.read_hud_region(
+                                    reg, rtop, rleft, None, profile=alt, strict=strict)
+                            else:
+                                t2s, c2, n2, b2 = self.read_hud_frame(
+                                    frame_rgb, profile=alt, strict=strict)
+                        except Exception as e:              # noqa: BLE001
+                            row["alt_err"] = str(e)[:80]
+                            continue
+                        if t2s and "?" not in t2s and b2 == 0 and n2 > 0:
+                            best = (t2s, c2, n2, b2, tag, strict)
+                            break
+                    if best:
+                        break
+                if best:
+                    t2s, c2, n2, b2, tag, strict = best
+                    row.update({"text": t2s, "n": n2, "conf": round(c2, 3), "nbad": b2,
+                                "profile": alt, "profile_src": "fallback",
+                                "alt_region": tag,
+                                "alt_variant": "strict" if strict else "raw"})
         row["ms"] = {"hud": (t1 - t0) * 1000.0, "axis": (t2 - t1) * 1000.0}
         return row
 
@@ -647,6 +695,26 @@ def axis_region_for(shape, use_ink=False, frame_rgb=None, bottom_frac=0.70):
     region = {"left": left, "top": 0, "width": int(max(1, right - left)),
               "height": int(round(bottom_frac * H))}
     return region, local_axis_geom(g, left, 0), g
+
+
+def pixel_region_for(shape, profile="yinlang999"):
+    """(H, W) → (**像素体档案自己那块**抓屏区域 dict, top, left)。
+
+    为什么必须单独一块（2026-10-05 实测）：像素体数字在 **y 224~341**，
+    而默认档案/墨迹定位给出的框只有 ~80px 高（实机 y 285~365）→ **把字顶切掉**，
+    字形图与训练分布不符 —— 实测同一帧：
+      * 用默认框（截顶）t=45 读成 `5?576`、t=238 读成 `1?3692`；
+      * 用**档案自己的框** 两张都读对（`52576` / `123692`）。
+    档案框标定在 2870×1800（录屏2），这里按分辨率等比缩放（换分辨率只留扩展点，本轮不投入验证）。
+    """
+    H, W = int(shape[0]), int(shape[1])
+    y0, x0, y1, x1 = HP.PROFILES[profile]["box"]
+    kx, ky = W / 2870.0, H / 1800.0
+    y0, y1 = max(0, int(round(y0 * ky))), min(H, int(round(y1 * ky)))
+    x0, x1 = max(0, int(round(x0 * kx))), min(W, int(round(x1 * kx)))
+    region = {"left": x0, "top": y0, "width": int(max(1, x1 - x0)),
+              "height": int(max(1, y1 - y0))}
+    return region, y0, x0
 
 
 def local_axis_geom(geom, offset_x, offset_y=0):

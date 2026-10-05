@@ -135,7 +135,7 @@ class ScreenSource:
     def __init__(self, axis_every=5, calibrate=False, verbose=True, use_calib=True,
                  dump_frames=None, dump_frames_every=3.0):
         from capture import Grabber
-        from mvp.reader import axis_region_for, hud_region_for
+        from mvp.reader import axis_region_for, hud_region_for, pixel_region_for
         self.g = Grabber()
         self.axis_every = max(1, axis_every)
         self.n = 0
@@ -152,6 +152,11 @@ class ScreenSource:
         shape = (self.screen[1], self.screen[0])
         # 线7 的墨迹几何要拿它当"平移基准"过闸（见 reader.ink_geometry_ok）
         self.model_geom = model_geometry(shape[0], shape[1])
+        # ⭐ 2026-10-05：像素体（银狼999 档案）**自己要一块区域** —— 默认框只有 ~80px 高，
+        #    会把像素数字的顶部切掉（见 `mvp.reader.pixel_region_for` 的实测数据）。
+        #    这块区域**每帧都抓**（776×148，约 0.1~0.3ms），因为像素体随时可能出现；
+        #    只有这样"常规档读不出来就切像素档"的兜底才拿得到正确的输入。
+        self.pixel_region, self.pixel_top, self.pixel_left = pixel_region_for(shape)
         if calibrate:
             import geometry as SA
             full = self.g.grab_screen()
@@ -428,6 +433,9 @@ class ScreenSource:
                  "axis_geom": self.axis_geom,
                  # T2 认脸要用：轴区域在原帧里的左上角（实时抓的是 x60~340 那条区域）
                  "axis_offset": (self.g.regions["axis"]["left"], self.g.regions["axis"]["top"]),
+                 # ⭐ 像素体档案自己的区域（见 __init__ 的说明；兜底读像素字体时用）
+                 "pixel_rgb": self.g.grab_rgb(self.pixel_region),
+                 "pixel_top": self.pixel_top, "pixel_left": self.pixel_left,
                  "read_axis": read_axis}
             self.n += 1
             # 落盘取证帧（与上面的读数**同源像素**）
@@ -639,7 +647,9 @@ def run(a):
                                 top=f["hud_top"], left=f["hud_left"], bar_rows=f["hud_bar"],
                                 axis_rgb=f["axis_rgb"], axis_geom=f.get("axis_geom"),
                                 axis_offset=f.get("axis_offset", (0, 0)),
-                                read_axis=read_axis, want_lm=bool(dump))
+                                read_axis=read_axis, want_lm=bool(dump),
+                                alt_region_rgb=f.get("pixel_rgb"),
+                                alt_top=f.get("pixel_top"), alt_left=f.get("pixel_left"))
                 t1 = time.perf_counter()
                 # 把"这一帧读没读到**完整数字** / 画面里有没有数字"告诉帧源，决定要不要重定位。
                 # ⚠️【P1 实机定案】这里以前传的是 `bool(text)` —— 而错误的框给的是 `?????`，
@@ -867,6 +877,37 @@ def selftest():
     import axis_actor as T
     print("  左侧标记模板库：%s" % (sorted(T._marker_bank()) or "(空)"))
 
+    # ⭐⭐ 2026-10-05：像素体（狼尊强普）**端到端读数**必须随包自检。
+    #     这一路连坏过三轮（喂错区域 / 蓝云穿掩膜 / 几何闸误杀），而"能加载模型"完全看不出来。
+    #     * t=100 `506286`：考"区域对不对 + 几何闸会不会误杀合法宽字"；
+    #     * t=200 `2052321`：考"收紧口径能不能挡住整片蓝云"。
+    #     判据与生产同一条：**切出字形 + 无坏字形 + 无 `?`**，且原口径→收紧口径依次试。
+    px_ok = True
+    try:
+        from PIL import Image as _Image
+        import hud_profiles as _HP
+        _by0, _bx0 = _HP.PROFILES["yinlang999"]["box"][:2]
+        for _t, _val in ((100, "506286"), (200, "2052321")):
+            _fp = R.resource("out/real_frames/pixel_t%d_%s.png" % (_t, _val))
+            if not os.path.exists(_fp):
+                print("    ⚠️ 缺像素体自检素材 %s → **跳过**该帧" % os.path.basename(_fp))
+                continue
+            _arr = np.ascontiguousarray(np.asarray(_Image.open(_fp).convert("RGB")))
+            _got = ""
+            for _strict in (False, True):
+                _txt, _c, _n, _nb, _ = p.read_hud_region(_arr, _by0, _bx0, None,
+                                                         profile="yinlang999", strict=_strict)
+                if _txt and "?" not in _txt and _nb == 0 and _n > 0:
+                    _got = "%s（%s口径，置信%.2f）" % (_txt, "收紧" if _strict else "原", _c)
+                    break
+            _good = _got.startswith(_val)
+            px_ok = px_ok and _good
+            print("    %s 像素体 t=%-4s 期望 %-8s 实得 %s"
+                  % ("✓" if _good else "✗", _t, _val, _got or "(读不出)"))
+    except Exception as e:                               # noqa: BLE001
+        px_ok = False
+        print("    ✗ 像素体端到端读数异常：%r" % (e,))
+
     print("\n=== 事件引擎（C 线判据，口径不许漂移）===")
     from mvp import engine as E
     E._selftest()
@@ -893,9 +934,9 @@ def selftest():
         print("  ⚠️ 建窗失败：%r" % (e,))
         print("  → 这一项**没有验证**（多半是没有桌面会话）；实机双击时再看")
 
-    print("\n自检%s" % ("通过 ✓" if (not miss and ov_ok is not False and p1_ok)
+    print("\n自检%s" % ("通过 ✓" if (not miss and ov_ok is not False and p1_ok and px_ok)
                       else "**未通过**"))
-    return 1 if (miss or ov_ok is False or not p1_ok) else 0
+    return 1 if (miss or ov_ok is False or not p1_ok or not px_ok) else 0
 
 
 def _selftest_p1(perc=None):

@@ -46,6 +46,9 @@ DATAS_REL = [
     #    → 自我感觉"加载成功"，实际用错模型，强普数字照样读不出。
     "out/digit_cnn_yinlang999.onnx",
     "out/digit_cnn_yinlang999.onnx.data",
+    # ⭐ 2026-10-05 补：像素体**自己的**等价性探针。没有它时 `check_model_freshness`
+    #    会拿默认字体那份探针去比像素体 ONNX（档案盲）→ 必然误报"不等价"。
+    "out/digit_cnn_yinlang999.probe.npz",
     "out/axis_top_bank_E.npz",     # 行动轴单位模板库（109 角色，共享库）
     "out/axis_top_bank_E2.npz",    # 行动轴单位模板库（录屏2 的 4 个单位）
     "out/axis_marker_bank_E.npz",  # 左侧标记模板库
@@ -58,6 +61,9 @@ DATAS_REL = [
     "out/t2_aha_timeline.json",
     # P1：实机帧 —— 让 exe 的 `--selftest` 能做**真实一帧的端到端读数断言**
     "out/real_frames/live_2880x1800_73431_q88.jpg",
+    # ⭐ 2026-10-05：像素体（狼尊强普）两张真值 HUD 区域 → exe 自检对像素体读数做端到端断言
+    "out/real_frames/pixel_t100_506286.png",
+    "out/real_frames/pixel_t200_2052321.png",
 ]
 
 # ── 运行时要 import 的**包目录**（PyInstaller 的静态分析看不到函数体内的 import）──

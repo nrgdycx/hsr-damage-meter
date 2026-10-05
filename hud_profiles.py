@@ -47,7 +47,14 @@ PROFILES = {
     # **尚未做**：让用户读数 → 训练它自己的分类器 → 验收。
     "yinlang999": {
         "label": "银狼999 总伤字体（像素方块字体）",
-        "box": (250, 2400, 360, 2870),   # 比常规字体更靠右、更高
+        # ⚠️ 2026-10-05 改框：原框 (250,2400,360,2870) 是**录屏1 标**的，太窄太矮：
+        #    * 像素体数字实测在 **y 224~341 / x 2042~2869**，原框上边 250 会把字顶切掉
+        #      → 实时链路读到**截顶的字形**（t=45 字高 53 vs 训练时 66、t=238 首字 43 vs 49）；
+        #    * 12 位口径需要 ≈670px 宽（见 用户口径与铁律 Q7），原框只有 470px。
+        #    换成 线2 验过的框（`hud_read_team2.HUD_REGION`，770×148）：
+        #    它同时**容得下实机 +25px 的偏移**（录屏1 实测偏差 → 数字会更靠下）。
+        #    ⚠️ 别再往上/下扩：实测把上界放到 200 会让蓝云进列分割、把相邻字**粘成 67px 宽块**。
+        "box": (226, 2100, 374, 2876),
         # 这套字体是**青绿**掩膜，线7 的"黄色墨迹"定位器对它不适用 → 关掉动态定位，
         # 用上面这条标定框（要适配它得另写一套掩膜定位，不在线7 范围）。
         "locate": False,
@@ -57,8 +64,12 @@ PROFILES = {
         "model": "out/digit_cnn_yinlang999.pt",
         "dataset": "out/digit_dataset_yinlang999.npz",
         "onnx": "out/digit_cnn_yinlang999.onnx",
-        # 实测：真字形高 49~94、宽 20~56、宽高比 0.24~0.83；碎片高 8~34、质量 ≤170
-        "geom": {"h": (40, 100), "w": (18, 80), "ratio": (0.20, 1.10)},
+        # 实测：真字形高 47~94、宽 20~71；碎片高 8~34、质量 ≤170（用 h/mass 两条闸挡）。
+        # ⚠️ 2026-10-05：宽高比上限 1.10 **太紧** —— t=100（真值 506286）里合法的
+        #    `6` = 58×49 = **1.18**、`2` = 57×51 = 1.12 都被判成"坏字形" →
+        #    实时链路读出 `50??86`（而分类器逐位全对！线2 不做这道几何闸，所以它读得对）。
+        #    按实测放宽到 1.35（留 ~15% 余量）；挡"换字体/区域跑偏"仍靠 w≤80、h≤118。
+        "geom": {"h": (40, 100), "w": (18, 80), "ratio": (0.20, 1.35)},
         "ready": True,
         "note": "分类器已训练（74 样本 / 14 帧；留一帧 70/74 = 94.6%；集成 14/15 整串）。"
                 "已知：真粘连块（>80px）不拆、整块丢弃 → 该帧读数会少位，"
@@ -149,8 +160,12 @@ def box_for(name="default", frame=None):
 
 
 def glyphs(name, frame_array, **over):
-    """按档案切字形。frame_array 必须是**整帧**（已经裁好的区域请用 glyphs_cropped）。"""
+    """按档案切字形。frame_array 必须是**整帧**（已经裁好的区域请用 glyphs_cropped）。
+
+    `strict`（只对像素体有意义）会透传给 `glyphs_cropped`。
+    """
     p = require_calibrated(name)
+    strict = over.pop("strict", False)
     if "box" in over:
         box, bar_rows = over["box"], over.get("bar_rows")
     else:
@@ -162,15 +177,20 @@ def glyphs(name, frame_array, **over):
             "在图上取不到档案 %r 的区域 %s（图尺寸 %s×%s）："
             "如果传进来的是**已裁好的区域**，请用 glyphs_cropped(profile, region, top, left)"
             % (name, (y0, x0, y1, x1), frame_array.shape[1], frame_array.shape[0]))
-    return glyphs_cropped(name, region, y0, x0, bar_rows=bar_rows)
+    return glyphs_cropped(name, region, y0, x0, bar_rows=bar_rows, strict=strict)
 
 
-def glyphs_cropped(name, region, top, left, bar_rows=None):
-    """给"已经裁好的区域"用（实时线）。按档案的 mode 分派到对应实现。"""
+def glyphs_cropped(name, region, top, left, bar_rows=None, strict=False):
+    """给"已经裁好的区域"用（实时线）。按档案的 mode 分派到对应实现。
+
+    `strict`：只对**像素体**有意义 —— 用收紧掩膜（挡录屏2 t=200 那种整片蓝云背景）。
+    两个口径**都要试**（见 `mvp/reader.py` 的像素体兜底）：默认口径与训练分布一致，
+    收紧口径只有在默认口径不可用时才采信。
+    """
     import hud_glyphs as HG
     p = require_calibrated(name)
     if p["mode"] == "cyan":
-        return HG.extract_cyan(region, top=top, left=left)
+        return HG.extract_cyan(region, top=top, left=left, strict=strict)
     return HG.extract_cropped(region, top=top, left=left,
                               mode=p["mode"], glyph_mode=p["glyph_mode"], expand=p["expand"],
                               bar_rows=bar_rows)
