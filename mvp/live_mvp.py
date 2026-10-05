@@ -936,6 +936,40 @@ def selftest():
         t2_ok = False
         print("    ✗ T2 顶端卡判定异常（模板库没进包时会这样）：%r" % (e,))
 
+    # ⭐⭐ 红兔（敌方场地效果 / 敌方给我方的 buff）**不许进合计** —— 引擎级断言。
+    #     用户 2026-10-05：「不是说那个敌方场地效果的红兔丢掉吗」。
+    #     判据：`card_type=enemy_buff` 的那一段必须记成 `non_ally`（不进分子也不进分母），
+    #     而且**不管轴上的分够不够**都要丢掉（分够时最危险：没有 T2 判定就会记给卡上那个人）。
+    #     纯合成行，不需要任何素材文件。
+    try:
+        from mvp import engine as _E
+        from mvp.reader import new_row as _new_row
+        _res_ok = True
+        for _tag, _score, _margin, _reject in (("分不够（现实路径）", 0.53, 0.08, "low_score"),
+                                               ("分够（危险路径）", 1.90, 1.40, "")):
+            _eng = _E.LiveEngine()
+            for _i in range(15):                          # HUD 停留 ≈0.5s
+                _r = _new_row(139.0 + _i / 30.0)
+                _r.update({"text": "28086", "n": 5, "conf": 0.99, "nbad": 0,
+                           "unit": "", "owner": "", "card_type": "enemy_buff",
+                           "score": _score, "margin": _margin,
+                           "marker": "enemy_dot", "inserted": "", "reject": _reject,
+                           "grade": "raw"})
+                _eng.add(_r)
+            _eng.flush()
+            _tot = _eng.totals()
+            _rows = _tot[0] if isinstance(_tot, tuple) else _tot
+            _st = _eng.state()
+            _good = (not _rows) and _st.get("n_non_ally", 0) >= 1
+            _res_ok = _res_ok and _good
+            print("    %s 红兔 %s → 合计 %s（事件 非我方%s/待复核%s）"
+                  % ("✓" if _good else "✗", _tag, _rows,
+                     _st.get("n_non_ally"), _st.get("n_review")))
+        t2_ok = t2_ok and _res_ok
+    except Exception as e:                               # noqa: BLE001
+        t2_ok = False
+        print("    ✗ 红兔不计入断言异常：%r" % (e,))
+
     print("\n=== 事件引擎（C 线判据，口径不许漂移）===")
     from mvp import engine as E
     E._selftest()

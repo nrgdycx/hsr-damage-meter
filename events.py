@@ -257,7 +257,22 @@ def find_actor(readings, t_anchor, back=1.5, fwd=0.5):
     """
     win = [r for r in readings if -back <= r["t"] - t_anchor <= fwd and r["unit"]]
     if not win:
-        return None, None
+        # ⚠️ 2026-10-05 补：**红兔（敌方场地效果）= `card_type=enemy_buff`** 的 `unit` 是空的
+        #    （它不属于我方任何人，`read_actor` 明确把 unit/owner 置空）→ 一直进不了这个窗口
+        #    → 判成 `actor_unknown` → `review`。数值上"不计入"没错，但语义不该是"行动者未知"：
+        #    这张卡是 **T2 用模板明确认出来的**（实测 1.900）→ 该记 `non_ally`（归敌方机制）。
+        #
+        #    ⚠️ 只兜底 `enemy_buff`，**不含** `card_type=enemy`：
+        #    实测把 `enemy` 也算进来会翻转 `events_v4 --anchors` 的两条锚点
+        #    （t=104 / t=134 从"正确弃权"变成"能判"→ 一致性 10/0/8 → 10/2/6）。
+        #    那两条锚点测的是"**1fps 网格那一帧能不能判**"，是用户参与定过的真值 —— 不碰。
+        #    普通敌方格（分数往往很低、没有独立模板确认）保持原样：判不出来就弃权。
+        #    ⇒ 只在"没有任何我方行动者"时才取它，因此**不可能翻转任何已有归属结论**。
+        win = [r for r in readings
+               if -back <= r["t"] - t_anchor <= fwd
+               and (r.get("card_type") or "") == "enemy_buff"]
+        if not win:
+            return None, None
     before = [r for r in win if r["t"] <= t_anchor]
     if before:
         best = max(before, key=lambda r: r["t"])          # 之前里最近的一个
@@ -526,9 +541,14 @@ def attribute(readings, run, back=1.5, fwd=0.5):
                 "inserted": actor_row["inserted"], "actor_score": actor_row["score"],
                 "actor_margin": actor_row["margin"], "actor_t": actor_row["t"]})
 
-    if card_type == "enemy":
+    if card_type in ("enemy", "enemy_buff"):
+        # `enemy_buff` = **红兔（敌方场地效果 / 敌方给我方的 buff）**。
+        # 2026-10-05 补：T2 定案它是"归敌方机制、不计入我方伤害"（见 docs/附伤与开大踢轴.md），
+        # 但判据里一直没有它的分支 → 落到最后那条 `else`，因为 owner 为空而记成 `review`。
+        # 数值上一样（review 也不进分子/分母），但**语义不对**：
+        # 它不该显示成"待复核（拿不准）"，而应明确是"非我方"。
         out["status"] = "non_ally"
-        issues.append("enemy_card")
+        issues.append("enemy_buff_card" if card_type == "enemy_buff" else "enemy_card")
     elif card_type == "empty":
         out["status"] = "review"
         issues.append("top_slot_empty")

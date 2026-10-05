@@ -763,9 +763,12 @@ def attribute4(readings, run, back=1.5, fwd=0.5, ult_window=True, ult_max_age=No
         # T1：这一段的行动者不是"直接读到的"，而是从演出两侧的锚点借来的 → 记明来源
         issues.append("ult_window_%s" % actor_src.split("_", 1)[1])
 
-    if out["card_type"] == "enemy":
+    if out["card_type"] in ("enemy", "enemy_buff"):
+        # `enemy_buff` = **红兔（敌方场地效果 / 敌方给我方的 buff）** → 归敌方机制、不计入我方伤害。
+        # 2026-10-05 补（与 events.py 同步）：原来没有这个分支 → owner 为空 → 记成 `review`。
+        # 数值一样（review 也不进分子/分母），但语义不对：不该显示成"待复核（拿不准）"。
         out["status"] = "non_ally"
-        issues.append("enemy_card")
+        issues.append("enemy_buff_card" if out["card_type"] == "enemy_buff" else "enemy_card")
     elif out["card_type"] == "empty":
         out["status"] = "review"
         issues.append("top_slot_empty")
