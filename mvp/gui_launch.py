@@ -89,11 +89,16 @@ class Panel:
 
         row2 = tk.Frame(self.root, bg=BG)
         row2.pack(fill="x", padx=pad, pady=(6, 0))
-        tk.Label(row2, text="倒计时(秒):", font=self.f_n, bg=BG, fg=FG).pack(side="left")
+        tk.Label(row2, text="倒计时(秒, 0=立即开始):", font=self.f_n, bg=BG, fg=FG).pack(side="left")
+        # ⚠️ 2026-10-05 我一度把默认从 10 改成 0（怀疑倒计时吃掉了第一击），
+        #    用户明确回复：「**我能保证我是倒计时结束开始战斗的**」→ 这条不成立，改回 10。
+        #    倒计时期间确实不采集（见 live_mvp.run() 的警告），但用户是靠它切回游戏的。
         self.v_cd = tk.StringVar(value="10")
         tk.Entry(row2, textvariable=self.v_cd, font=self.f_n, width=6).pack(side="left", padx=6)
         tk.Label(row2, text="采集时长(秒, 0=不停):", font=self.f_n, bg=BG, fg=FG).pack(side="left")
-        self.v_sec = tk.StringVar(value="3600")
+        # 默认 **0 = 不限时**（用户 2026-10-05：「默认采集时长为 0」）。
+        # 原来默认 3600（1 小时）→ 超过就自动停，快照/长局会莫名其妙断掉。
+        self.v_sec = tk.StringVar(value="0")
         tk.Entry(row2, textvariable=self.v_sec, font=self.f_n, width=7).pack(side="left", padx=6)
 
         # 按钮
@@ -147,6 +152,16 @@ class Panel:
 
         args = ["--countdown", str(int(cd)), "--seconds", str(int(sec)),
                 "--overlay", "--pos", "%d,%d" % (x, y)]
+        # ⭐ 2026-10-05：**每次都落一份逐帧明细**（用户报"第一下丢失/重复计数"这类问题
+        #    时，只有逐帧明细能定位 —— 光看 2 秒一行的 [诊断] 不够）。
+        #    路径 = exe 同目录 out/逐帧明细.csv（与 运行日志.txt 同一处，好找）。
+        #    成本：一行约 200B，一局几分钟 → 几十 KB，可以忽略。
+        try:
+            _dumpdir = os.path.join(os.path.dirname(self._log_file() or ROOT), "out")
+            os.makedirs(_dumpdir, exist_ok=True)
+            args += ["--dump-readings", os.path.join(_dumpdir, "逐帧明细.csv")]
+        except Exception:
+            pass
         cmd = _spawn_cmd(args, self.frozen)
         self.log("$ " + " ".join('"%s"' % c if " " in c else c for c in cmd))
         # 从"日志文件末尾"开始读（只显示本次新增的行）

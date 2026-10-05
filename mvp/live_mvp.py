@@ -299,7 +299,12 @@ class ScreenSource:
             self._rej_n = (self._rej_n + 1) if same else 1
             self._rej_box = box_now
             self.n_ink_rejected += 1
-            if self._rej_n < 15 or not self._box_plausible(box_now):
+            # ⚠️ 2026-10-05：**开局**（还没读到过完整数字）把门槛放低 ——
+            #    15 次 × 0.5s 限速 = 最坏 **7.5 秒**一直用错框 → 这几秒里的伤害全丢
+            #    （用户报的"第一下伤害丢失"）。开局 4 次（≈2s）就按画面证据采用；
+            #    读到过完整数字之后仍旧 15 次（那时框已经可信，不该轻易改）。
+            _streak = 4 if not self._ever_reliable else 15
+            if self._rej_n < _streak or not self._box_plausible(box_now):
                 return False
             self.n_forced += 1
             print("  ⚠️ 同一个墨迹框连续 %d 次不符合模型框（布局确实不同）→ **按画面证据强制采用** "
@@ -491,7 +496,13 @@ class ScreenSource:
             return
         self._fails += 1
         now = time.perf_counter()
-        if (has_ink and now - self._last_try >= 0.5) or \
+        # ⚠️⚠️ 2026-10-05（用户：「**第一下伤害丢失**」）：开局**第一次看见数字**时不守
+        #     那 0.5 秒的限速，**立刻**重定位。
+        #     为什么：开局那一对框是模型兜底（实机上约差 25px，读出 `?????`），
+        #     而首击的 HUD 只亮 ≈0.5s —— 被限速/排队拖一下就整段没了。
+        #     `_ever_reliable` 只在**读到过完整数字**后置位，所以这只影响开局那一次。
+        first_ink = bool(has_ink) and not self._ever_reliable
+        if first_ink or (has_ink and now - self._last_try >= 0.5) or \
            (self._fails % 90 == 0 and now - self._last_try >= 1.0):
             self._last_try = now
             self._last_periodic = now
@@ -544,10 +555,19 @@ def calib_save(path, screen, box, bar):
 # ══════════════════════════════ 主循环 ══════════════════════════════
 def run(a):
     # 倒计时：给你时间切回游戏（一执行命令，焦点就离开游戏了，mss 会抓到别的窗口）
+    #
+    # ⚠️⚠️ 2026-10-05 用户报「**第一下伤害丢失**」——真因就在这里：
+    #     倒计时跑在 `ScreenSource` **之前**，也就是**这段时间一个字都没采**，
+    #     这几秒里打出来的伤害**必然丢**（用户流程是"点了开始统计就开打"）。
+    #     ⇒ GUI 的倒计时默认已改成 **0**；这里再明确警告一次，别再让人以为"倒计时也在录"。
     if a.countdown and a.countdown > 0 and not a.replay:
+        print("  ⚠️ 倒计时 %d 秒：**这几秒不采集**，期间打出的伤害不会被记录。"
+              "不想丢就把它设成 0。" % int(a.countdown), flush=True)
         for i in range(int(a.countdown), 0, -1):
             print("  %d 秒后开始采集…（现在切回游戏）" % i, flush=True)
             time.sleep(1)
+    if not a.replay:
+        print("  ▶ 现在开始采集**（此刻之前的伤害不会进合计）**", flush=True)
 
     # ⭐ P1 安全网（**只给实机开**）：读数 `?` 之外再加一道"段宽/墨迹跨度"闸，
     #    拦住"看着像数、其实是动画里切出来的小块"这种**自信的错值**
@@ -656,7 +676,16 @@ def run(a):
                 #    非空 → 被当成读到了 → 永不重定位 → "数字动都不动、一直待复核"。
                 ok = read_is_reliable(row)
                 if hasattr(src, "note_hud_result"):
-                    src.note_hud_result(ok, has_ink=bool(f.get("hud_has_ink")))
+                    # ⚠️ 2026-10-05：光看"当前框那块 crop 里有没有墨迹"不够 ——
+                    #    开局那一对框可能是**错的**，数字出现在别处时它那块 crop 里没有墨迹
+                    #    → `has_ink=False` → 不会立刻重定位 → 只能等每 5 秒的定期复核
+                    #    （这几秒的伤害就是用户报的"第一下丢失"）。
+                    #    ⇒ 读不出来时**再用"像素体那块宽区域"**（y 226~374 / x 2100~2880，
+                    #      已经每帧抓好了）确认一次有没有数字墨迹。只在坏帧上算，不占预算。
+                    has_ink = bool(f.get("hud_has_ink"))
+                    if not ok and not has_ink and f.get("pixel_rgb") is not None:
+                        has_ink = hud_has_ink(f["pixel_rgb"])
+                    src.note_hud_result(ok, has_ink=has_ink)
                 new = eng.add(row)
                 t2 = time.perf_counter()
                 if dump is not None:

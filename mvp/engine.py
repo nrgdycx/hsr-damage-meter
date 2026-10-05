@@ -229,9 +229,16 @@ class LiveEngine:
     #: 比如动画会显示 20->30->40，要记录的是 40 而不是 90」。
     #: 强普/大招的伤害是**分阶段累加**的，读数一级一级往上跳（20→30→40）；
     #: 这种**单调递增**如果中间被切了一刀，就变成多个事件、**逐段相加 = 重复计数**。
-    MERGE_GAP = 2.5          # 后一段起点距前一段终点多近才算"同一击"
-    MERGE_MIN_RATIO = 0.60   # 后一段最大值 ≥ 前一段 ×这个比例（递增/持平）
-    MERGE_FLOOR = 200_000    # 两段都 ≥ 这个量级才合并（防小额误并）
+    #
+    #: ⚠️⚠️ 2026-10-05 二轮（用户：「多段伤害（狼尊强普/黄泉大招/飞霄大招）**如果用户
+    #:    操作慢一点，会重复采集**」）—— 三个参数都改过，理由逐条写清：
+    MERGE_GAP = 12.0         # 原来是 2.5。一次强普 = 分段弹射 + 多次盲盒暂停 + 最后一击
+                             # （技能 150608「奖励关·狼尊时刻」），拖十几秒很正常；
+                             # 黄泉/飞霄的大招演出窗口也有 5~7s。2.5s 的窗口根本连不起来
+                             # → 实测 20万→30万→40万 被算成 **90万**。
+    MERGE_MIN_RATIO = 0.60   # 后段**起点** ≥ 前段峰值 ×这个比例（见下面 _maybe_merge_tail）
+    MERGE_FLOOR = 1_000      # 原来是 20 万：小额分段（2万→3万→4万）会被挡在外面 → 重复计数。
+                             # 现在只用来排除纯噪声（真正的碎读数是几十~几百量级）。
 
     def _maybe_merge_tail(self):
         """把"同一次攻击被切成多段"的尾部事件合并掉（见 `MERGE_GAP` 的说明）。
@@ -249,6 +256,12 @@ class LiveEngine:
 
         ⚠️ 只在"值在涨"时并：**跌下去**（新一击从小数重新开始）正是原 reset 判据，
         那种情况两段的比值会远低于 `MERGE_MIN_RATIO`，不会被并。
+
+        ⚠️⚠️ 2026-10-05 二轮：把"后段**峰值** ≥ 前段×0.6"改成"后段**起点** ≥ 前段峰值×0.6"。
+        为什么（同一个人连着两次**真**攻击时，老判据会把小的那次吞掉 = 用户说的"第一下丢失"）：
+          * 分段累加（同一次攻击）：后段的起点**接着**前段的峰值继续涨 → 起点必然 ≥ 前段峰值 ✓ 并；
+          * 两次真攻击背靠背：后段从**小数字重新开始**（累计值归零）→ 起点远低于前段峰值 ✗ 不并。
+        老判据拿**峰值**比，于是"小攻击(5万) 之后跟一次大攻击(1万涨到30万)"会被并掉 5万 → 少算。
         """
         if len(self.events) < 2:
             return
@@ -262,14 +275,35 @@ class LiveEngine:
                 return
             da = int(a.get("damage_max") or 0)
             db = int(b.get("damage_max") or 0)
+            db_first = int(b.get("damage_first") or 0)
             if da < self.MERGE_FLOOR or db < self.MERGE_FLOOR:
                 return
-            if db < da * self.MERGE_MIN_RATIO:
+            # 必须"还在涨"（跌了 = 新一击，累计值归零）
+            if db < da:
+                return
+            # 后段必须是"接着前段的数继续涨"，不是"从小数字重新开始"
+            if db_first < da * self.MERGE_MIN_RATIO:
                 return
             ta = float(a.get("t_last") or a.get("t_anchor") or 0.0)
             tb = float(b.get("t_first") or b.get("t_anchor") or 0.0)
             if tb - ta > self.MERGE_GAP:
                 return
+            # ⚠️ 还要确认"中间**没有归零过**"：同一次攻击的累计值只会涨，
+            #    只有真正重新开始（新一击 / 清场后重新施放）才会先掉回去。
+            #    ⚠️ 这里**故意不经过 `E4.value()`** —— 它会把"被剔除"的读数算成 None，
+            #       而小读数恰好常被 R1b「量级碎片」规则**误剔**（实测：5万 → 1万→30万 那次
+            #       1万被剔 → 只看 damage_first 会误判成"接着涨" → 把前一次真攻击吞掉）。
+            #       这里只把"是个像样的数字（≥ MERGE_FLOOR）且明显低于前段峰值"当作
+            #       **归零证据** —— 不用它计数，所以误剔也不影响正确性。
+            for r in self.rows:
+                if not (ta < r["t"] <= tb) or r.get("grade") != "raw":
+                    continue
+                try:
+                    v = int(r.get("text") or 0)
+                except (TypeError, ValueError):
+                    continue
+                if self.MERGE_FLOOR <= v < da * 0.5:
+                    return                     # 归零过 → 那是新一击，不许并
         except Exception:                                # noqa: BLE001
             return
         # 合并：保留 b（更大的那个值），a 标掉并移除
@@ -435,7 +469,46 @@ def _selftest():
     assert all(e["status"] == "review" for e in eng2.events), eng2.events
     assert eng2.totals()[1] == 0, "待复核不许进合计"
     assert eng2.current_actor() is None, "判不出来时不许回退到'上一个人'"
-    print("engine 自检通过：口径=只算 status=ok；判不出来不进合计、不猜")
+
+    # ── 多段伤害（分段累加）：**慢**也不能重复计数，**两次真攻击**也不许被吃掉 ──
+    # 用户 2026-10-05：「多段伤害（狼尊强普/黄泉大招/飞霄大招）如果用户操作慢一点，
+    #   会重复采集，比如狼尊一定要经过三次固定的数字，第四次数字才是总伤」。
+    # 技能依据见 `out/skills_L2.json` 的 150608『奖励关：狼尊时刻』：
+    #   分段弹射 + 每若干段暂停触发一次盲盒 + 最后发动最后一击 = **一次攻击**，只记最后一个总数。
+    def _case(name, script, expect, want_events=None):
+        e = LiveEngine()
+        for t, txt in script:
+            e.add(feed(t, txt, len(txt), "遐蝶" if txt else "", "遐蝶" if txt else ""))
+        e.flush()
+        rows_, total_ = e.totals()
+        got = {r["owner"]: r["damage"] for r in rows_}
+        assert total_ == expect, "%s：合计 %s，期望 %s（%s）" % (name, total_, expect, got)
+        if want_events is not None:
+            assert len(e.events) == want_events, "%s：事件数 %d，期望 %d" % (
+                name, len(e.events), want_events)
+
+    def _blanks(t0, n, step=0.2):
+        return [(round(t0 + i * step, 2), "") for i in range(n)]
+
+    # A 慢速分段累加（段间隔 ~4s）：20万 → 30万 → 40万  → 只记 40 万
+    _case("慢速分段累加", [(0.0, "200000"), (0.2, "200000")] + _blanks(0.4, 18) +
+          [(5.0, "300000"), (5.2, "300000")] + _blanks(5.4, 18) +
+          [(10.0, "400000"), (10.2, "400000")] + _blanks(10.4, 14), 400000, 1)
+    # B 同样分段但数值小（原来被 MERGE_FLOOR=20万 挡在外面 → 重复计数）：2万→3万→4万
+    _case("慢速分段（小额）", [(0.0, "20000"), (0.2, "20000")] + _blanks(0.4, 18) +
+          [(5.0, "30000"), (5.2, "30000")] + _blanks(5.4, 18) +
+          [(10.0, "40000"), (10.2, "40000")] + _blanks(10.4, 14), 40000, 1)
+    # C 背靠背两次**真**攻击（同一个人、后一次从 1万 重新涨到 30万）→ 必须记 5万+30万
+    _case("背靠背两次真攻击", [(0.0, "50000"), (0.2, "50000")] + _blanks(0.4, 18) +
+          [(5.0, "10000"), (5.2, "10000"), (5.4, "30000"), (5.6, "100000"),
+           (5.8, "200000"), (6.0, "300000"), (6.2, "300000")] + _blanks(6.4, 14),
+          350000, 2)
+    # D 快速分段（本来就该对，防回归）：20万→30万→40万 段间隔 ~1s
+    _case("快速分段（对照）", [(0.0, "200000"), (0.2, "200000"), (0.4, ""), (0.6, ""),
+          (0.8, "300000"), (1.0, "300000"), (1.2, ""), (1.4, ""),
+          (1.6, "400000"), (1.8, "400000")] + _blanks(2.0, 14), 400000, 1)
+    print("engine 自检通过：口径=只算 status=ok；判不出来不进合计、不猜；"
+          "多段累加慢也不重复计数、两次真攻击不被吃掉")
     return 0
 
 
