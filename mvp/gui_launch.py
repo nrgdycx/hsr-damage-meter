@@ -160,6 +160,10 @@ class Panel:
             _dumpdir = os.path.join(os.path.dirname(self._log_file() or ROOT), "out")
             os.makedirs(_dumpdir, exist_ok=True)
             args += ["--dump-readings", os.path.join(_dumpdir, "逐帧明细.csv")]
+            # ⭐ 2026-10-05 五轮：**同时**存"结论下不来的帧"的原图（行动轴裁图 + HUD 裁图）。
+            #    用户四条反馈里三条（忘归人认不出 / 无中生有一个昔涟 / 姬子启行大招只显示一帧）
+            #    都只能靠**那一帧的图**定位 —— 没有图就只能猜。
+            args += ["--dump-miss", os.path.join(_dumpdir, "结论下不来的帧")]
         except Exception:
             pass
         cmd = _spawn_cmd(args, self.frozen)

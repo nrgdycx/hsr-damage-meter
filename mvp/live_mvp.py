@@ -63,6 +63,10 @@ DIAG_COLS = ["t", "hud_text", "hud_n", "hud_nbad", "hud_conf", "hud_has_q", "hud
              "score", "margin", "marker", "card_type", "ms_frame", "ms_hud", "ms_axis",
              "reliable"]
 
+#: ⭐ 2026-10-05 五轮【取证】：`--dump-miss` 最多存多少帧"结论下不来的帧"
+#: （有数字没归属 / 有卡认不出）。一张轴裁图 ~50KB → 上限 300 帧 ≈ 15MB，不会写爆磁盘。
+MISS_MAX = 300
+
 
 # ══════════════════════════════ 帧源 ══════════════════════════════
 class ReplaySource:
@@ -660,7 +664,20 @@ def run(a):
 
     ms = {"frame": [], "src": [], "hud": [], "axis": [], "engine": [], "ui": []}    # ⭐ P1 统计：验收要求"哪种帧读不出来要**可计数**"，不是"有时候不行"
     st_n = {"frame": 0, "text": 0, "reliable": 0, "hasq": 0, "nog": 0, "ink": 0,
-            "axis_read": 0, "axis_unit": 0, "suspect": 0}
+            "axis_read": 0, "axis_unit": 0, "suspect": 0, "miss_saved": 0}
+    # ⭐ 2026-10-05 五轮【取证】：把"结论下不来的帧"（有数字没归属 / 有卡认不出）
+    #    连同**原图**存下来，便于下次直接看图定位（用户四条反馈里三条属于这类）。
+    #    有上限 `MISS_MAX`，不会把磁盘写爆。
+    miss_dir = getattr(a, "dump_miss", None)
+    if miss_dir:
+        try:
+            os.makedirs(miss_dir, exist_ok=True)
+            with open(os.path.join(miss_dir, "读数.jsonl"), "w", encoding="utf-8"):
+                pass                                   # 每次开台清空
+            print("  取证：结论下不来的帧会存到 %s（上限 %d 帧）" % (miss_dir, MISS_MAX))
+        except Exception as e:                         # noqa: BLE001
+            print("  ⚠️ 建取证目录失败（不影响记录）：%r" % (e,))
+            miss_dir = None
     st_src = {}
     t_start = time.perf_counter()
     t_last_log = t_start
@@ -700,6 +717,50 @@ def run(a):
                 t2 = time.perf_counter()
                 if dump is not None:
                     csv.writer(dump).writerow(perc.as_csv_row(row))
+                # ⭐⭐ 2026-10-05 五轮【取证】——用户四条反馈里有三条是"**卡只亮一两帧/认不出**"
+                #    （忘归人认不出、无中生有一个昔涟、姬子启行大招把行动轴踢掉只显示一帧）。
+                #    没有那一帧的**原图**就只能猜，所以这里把"**结论下不来的帧**"当场存下来：
+                #      * 有数字但**没有归属**（这一击记不进去 = 用户说的"第一次伤害不记录"）
+                #      * 顶端有卡但**分数不够**（认脸失败 = 忘归人/姬子那种）
+                #    存 **行动轴裁图 + HUD 裁图 + 该帧读数(JSONL)**，体积小、边界清楚（有上限）。
+                if miss_dir is not None and st_n["miss_saved"] < MISS_MAX:
+                    _own = str(row.get("owner") or "")
+                    _txt = str(row.get("text") or "")
+                    _rj = str(row.get("reject") or "")
+                    _sus = (bool(_txt.strip()) and not _own) or \
+                           (bool(_rj) and _rj != "empty" and _txt.strip()) or \
+                           (bool(_own) and float(row.get("margin") or 0) < 0.30)
+                    # ↑ 第三条 = **弱判定的归属**：margin 小说明"差点就认成别人了"，
+                    #   正是"无中生有一个昔涟"那类假阳性的特征（实测好帧 margin 1.4~1.5，
+                    #   坏帧 0.05~0.19）。只存图、不改判定，所以不会影响结果。
+                    if _sus:
+                        try:
+                            from PIL import Image as _Im
+                            _tag = "t%09.2f" % row["t"]
+                            # ⚠️ 裁图是 int16（mss/np.asarray 出来的）→ PIL 存不了
+                            #    （实测 `TypeError: Cannot handle this data type: (1,1,3), <i2>`）
+                            #    → 一律先转 uint8（像素值本来就在 0~255）。
+                            if f.get("axis_rgb") is not None:
+                                _Im.fromarray(np.ascontiguousarray(
+                                    f["axis_rgb"], dtype=np.uint8)).save(
+                                    os.path.join(miss_dir, "axis_%s.png" % _tag))
+                            if f.get("hud_region") is not None:
+                                _Im.fromarray(np.ascontiguousarray(
+                                    f["hud_region"], dtype=np.uint8)).save(
+                                    os.path.join(miss_dir, "hud_%s.png" % _tag))
+                            with open(os.path.join(miss_dir, "读数.jsonl"), "a",
+                                      encoding="utf-8") as _jf:
+                                _jf.write(json.dumps({
+                                    "t": row["t"], "text": _txt, "n": row.get("n"),
+                                    "unit": row.get("unit"), "owner": _own,
+                                    "score": row.get("score"), "margin": row.get("margin"),
+                                    "marker": row.get("marker"), "card_type": row.get("card_type"),
+                                    "raw_unit": row.get("raw_unit"), "reject": _rj,
+                                    "h_med": row.get("h_med"), "big": row.get("big"),
+                                }, ensure_ascii=False) + "\n")
+                            st_n["miss_saved"] += 1
+                        except Exception as e:              # noqa: BLE001
+                            print("  ⚠️ 存「结论下不来的帧」失败（不影响记录）：%r" % (e,))
                 # ── P1 统计（验收要求"哪种帧读不出来要**可计数**"）──
                 txt = str(row.get("text") or "")
                 st_n["frame"] += 1
@@ -1213,7 +1274,10 @@ def parse_args(argv=None):
                     help="启动前倒计时秒数（给你时间切回游戏；0=不等）")
     ap.add_argument("--max-frames", type=int, default=0)
     ap.add_argument("--axis-every", type=int, default=None,
-                    help="每 N 帧读一次行动轴（实时默认 5，回放默认 1）")
+                    help="每 N 帧读一次行动轴（实时默认 **1**＝每帧读；回放默认 1）")
+    ap.add_argument("--dump-miss", default=None,
+                    help="取证目录：把「结论下不来的帧」（有数字没归属 / 有卡认不出）"
+                         "的**行动轴裁图 + HUD 裁图 + 读数**存进去（上限 %d 帧）" % MISS_MAX)
     ap.add_argument("--backend", choices=("onnx", "torch"), default="onnx",
                     help="HUD 分类器后端（实时用 onnx）")
     ap.add_argument("--conf-min", type=float, default=0.55)
