@@ -549,6 +549,47 @@ def pair_score(f1, f2):
     return W_GRAY * ch + W_GRAD * gr + W_COLOR * co
 
 
+def _passes(bank, img, geom, thr, min_margin):
+    """这张图 + 这套几何，能不能**过闸**（分数 ≥thr 且与第二名分差 ≥min_margin）。
+
+    与 `read_actor` 里那条判据同口径 —— 这样"裁不裁"的裁决与最终结论是同一个标准。
+    """
+    sc = match(bank, img, geom["s"], geom=geom)
+    rank = sorted(sc.items(), key=lambda kv: -kv[1][0])
+    best = rank[0][1][0]
+    second = rank[1][1][0] if len(rank) > 1 else -1.0
+    return (best >= thr and (min_margin is None or best - second >= min_margin)), best
+
+
+def self_locate(img, bank, thr=THR, min_margin=MIN_MARGIN):
+    """整帧输入：给出几何，**并顺便决定"黑边裁不裁"**。返回 (图, 几何)。
+
+    ⚠️⚠️ 为什么不能无条件裁（2026-10-05，交接文档 §2.1 的离线残留）：
+    `crop_letterbox` 的判据是"纯黑且方差近 0"，而**暗场景/转场**经常骗过它。
+    实测 1427 张真实游戏整屏帧里，**31 张**会被判出黑边 —— 而这些帧的游戏 UI
+    **根本没动**，裁了只会让卡框整体偏几个像素（例：`f00359.00` 不裁 1.890 → 裁后 0.799）。
+
+    但**也不能一律不裁**：用户素材是真信箱边 ——
+    `水砂视频.mp4` 上下 **92/88px**（不裁 0.61~0.70 / 裁后 1.70~1.89）、
+    `皮肤.mp4` 甚至出现**单侧** 48px。所以纯几何阈值（比如"两侧对称才算"）切不开，别走那条路。
+
+    ⇒ 裁决标准**不是"分数更高"，而是"能不能过闸"**（实测这就是两组的分界线）：
+      * 真信箱边：不裁过不了闸、裁了才过 → 裁；
+      * 伪黑边：两种都过不了闸（或本来就能过）→ **不裁**（不动坐标更安全）。
+    平手一律**不裁**。
+    """
+    g_raw = geom_for(img)
+    raw_ok, _b = _passes(bank, img, g_raw, thr, min_margin)
+    cropped, _bar = crop_letterbox(img)
+    if cropped.shape == img.shape:          # 没判出黑边：绝大多数帧走这条，零额外开销
+        return img, g_raw
+    g_crop = geom_for(cropped)
+    crop_ok, _b2 = _passes(bank, cropped, g_crop, thr, min_margin)
+    if crop_ok and not raw_ok:
+        return cropped, g_crop
+    return img, g_raw
+
+
 def read_actor(src, bank=None, thr=THR, min_margin=MIN_MARGIN, geom=None):
     """读一帧的当前行动者。返回 dict（无法判定时 unit=None）。
 
@@ -575,8 +616,7 @@ def read_actor(src, bank=None, thr=THR, min_margin=MIN_MARGIN, geom=None):
     # 注意 `crop_letterbox` 的判据是"纯黑且方差近 0"，暗场景/转场很容易骗过它 →
     # 这在实机上是**常态**，不是罕见边界。
     if geom is None:
-        img, _bar = crop_letterbox(img)     # 整帧输入：先裁黑边，几何就在裁后的图上算
-        geom = geom_for(img)
+        img, geom = self_locate(img, bank, thr=thr, min_margin=min_margin)
     s = geom["s"]
     sc = match(bank, img, s, geom=geom)
     rank = sorted(sc.items(), key=lambda kv: -kv[1][0])
@@ -687,6 +727,34 @@ def selftest(verbose=True):
             bad.append("缩放 %.2fx 判成 %s（期望遐蝶）" % (s, r["owner"] or "待复核"))
         elif verbose:
             print("  OK  缩放%.2fx -> %s（分数%.2f）" % (s, r["owner"], r["score"]))
+    # ── 黑边裁决（2026-10-05）：两个方向都要对 ──────────────────────────────
+    # 判据是"裁完还过不过闸"，不是"有没有黑边"，也不是"分数更高"（见 self_locate）。
+    base = read_actor(img, bank)
+    # ① **伪黑边**：在卡上方涂一条 20px 纯黑（游戏 UI 没动）→ 必须**不裁**，读数不变。
+    painted = img.copy()
+    painted[:20] = 0
+    try:
+        rp = read_actor(painted, bank)
+        ok_p = (rp["owner"] == base["owner"] and abs(rp["score"] - base["score"]) < 1e-9)
+    except Exception as e:                           # noqa: BLE001
+        ok_p, rp = False, {"owner": "报错:%s" % str(e)[:40], "score": 0.0}
+    if not ok_p:
+        bad.append("伪黑边（卡上方涂 20px 黑）被当成信箱边裁了：期望 %s/%.2f，实得 %s/%.2f"
+                   % (base["owner"], base["score"], rp["owner"] or "待复核", rp["score"]))
+    elif verbose:
+        print("  OK  伪黑边不裁   -> %s（分数%.2f）" % (rp["owner"], rp["score"]))
+    # ② **真信箱边**：在**上边**贴 20px 纯黑（内容整体下移，等价于真信箱边）→ 必须**裁掉**才对得上。
+    padded = cv2.copyMakeBorder(img, 20, 0, 0, 0, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+    try:
+        rd = read_actor(padded, bank)
+        ok_d = (rd["owner"] == base["owner"] and rd["score"] >= base["score"] - 1e-9)
+    except Exception as e:                           # noqa: BLE001
+        ok_d, rd = False, {"owner": "报错:%s" % str(e)[:40], "score": 0.0}
+    if not ok_d:
+        bad.append("真信箱边（上边贴 20px 黑、内容下移）没救回来：期望 %s/%.2f，实得 %s/%.2f"
+                   % (base["owner"], base["score"], rd["owner"] or "待复核", rd["score"]))
+    elif verbose:
+        print("  OK  真信箱边裁回   -> %s（分数%.2f）" % (rd["owner"], rd["score"]))
     return bad
 
 
