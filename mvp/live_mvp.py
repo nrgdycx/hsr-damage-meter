@@ -328,8 +328,8 @@ class ScreenSource:
                       % (hud, bar, self.n_reloc))
         return True
 
-    def wait_for_game(self, timeout=45.0, poll=0.5, verbose=True):
-        """开局**短尝试**定位一次（不阻塞），然后立刻开始记录。
+    def wait_for_game(self, timeout=0.0, poll=0.5, verbose=True):
+        """开局**尝试**定位（默认**不等待**），然后立刻开始记录。
 
         ⚠️⚠️【用户反馈 2026-10-01 —— 这里曾经做错，务必看】⚠️⚠️
         用户原话："我用的时候是在进战前开始的，这样能保证所有的伤害能被记录，
@@ -340,30 +340,45 @@ class ScreenSource:
         开局时还没有伤害数字 → 没有墨迹 → 定位必然失败 → 白等到超时，
         把最早几段伤害全丢掉。
 
+        ⚠️⚠️【用户反馈 2026-10-05，第二轮】⚠️⚠️
+        用户原话："**不应该看到数字在开始计，不然第一次伤害会丢掉**"。
+        当时 `--wait-game` 默认 **3.0 秒**，而函数体是 `while 已用时长 < timeout` 的**循环重试**
+        （每 `poll=0.5s` 一次）—— 也就是：**进战前那 3 秒一定白等满**才开始逐帧记录。
+        这既与下面的 docstring 自相矛盾（写的是"只顺手试一次"），
+        又正好把启动门控在"能不能定位到 HUD"≈"能不能看见数字"上。
+        ⇒ 改成：**先尝试一次（几毫秒；`frames()` 开头还会再定位一次），
+          然后把剩下的重试交给 `timeout`**；`--wait-game` 默认 **0 = 不等**。
+
         ⇒ 正解（当前实现）：
-          1. **立刻开始记录**（用兜底框，能读到就读）；
+          1. **立刻开始记录**（用兜底框/上次标定，能读到就读）；
           2. 一旦**第一帧读到数字**，`note_hud_result` 触发重定位 →
              自动切到正确的动态框；
-          3. 本函数只做**一次短尝试**，不阻塞主流程。
+          3. 本函数默认**不阻塞主流程**（`timeout>0` 才等待，那是给调试/特殊场景留的）。
 
         返回 True 表示开局就定位成功（进战前通常为 False，不影响记录）。
         """
         t0 = time.perf_counter()
         n = 0
-        while time.perf_counter() - t0 < max(0.0, timeout):
+        while True:                       # 至少尝试一次（timeout=0 时也只尝试一次）
             n += 1
             if self.relocate(verbose=False):
                 if verbose:
                     print("  ✓ 开局即定位到 HUD（用时 %.1fs）" % (time.perf_counter() - t0))
                 return True
+            if time.perf_counter() - t0 >= max(0.0, timeout):
+                break
             if verbose and n % 6 == 0:
                 print("  … 开局暂未定位到 HUD（%d 秒）—— 不影响记录："
                       "先用兜底框读，读到数字后会自动重定位。"
                       % int(time.perf_counter() - t0))
             time.sleep(poll)
         if verbose:
-            print("  ⚠️ 开局未定位到 HUD（正常：进战前还没有伤害数字）。"
-                  "已用兜底框开始记录；读到数字后会自动切到动态框。")
+            if timeout and timeout > 0:
+                print("  ⚠️ 开局未定位到 HUD（正常：进战前还没有伤害数字）。"
+                      "已用兜底框开始记录；读到数字后会自动切到动态框。")
+            else:
+                print("  · 开局未定位到 HUD（正常：进战前还没有伤害数字）→ **立即开始记录**，"
+                      "读到数字后会自动重定位。")
         return False
 
     def frames(self):
@@ -1048,8 +1063,10 @@ def parse_args(argv=None):
                     help="实时模式改用 line7 墨迹定位（多分辨率试验；HUD 侧实测会掉分）")
     ap.add_argument("--speed", type=float, default=0.0, help="回放倍速（0=全速）")
     ap.add_argument("--seconds", type=float, default=0.0, help="实时模式时长（0=直到 Ctrl+C）")
-    ap.add_argument("--wait-game", type=float, default=3.0,
-                    help="开局顺手试定位的秒数（不阻塞；默认 3）。进战前开始记录时设 0 即可")
+    ap.add_argument("--wait-game", type=float, default=0.0,
+                    help="开局等待定位的秒数。**默认 0 = 不等待**：先尝试一次就立刻开始记录"
+                         "（用户 2026-10-05：'不应该看到数字才开始计，不然第一次伤害会丢掉'）。"
+                         "设 >0 只在调试/特殊场景用；等待期间不抓帧 → 那段时间的伤害会丢")
     ap.add_argument("--countdown", type=float, default=0.0,
                     help="启动前倒计时秒数（给你时间切回游戏；0=不等）")
     ap.add_argument("--max-frames", type=int, default=0)
