@@ -908,6 +908,34 @@ def selftest():
         px_ok = False
         print("    ✗ 像素体端到端读数异常：%r" % (e,))
 
+    # ⭐⭐ 2026-10-05 二轮：T2 顶端卡种类（**盲盒** / 红兔 / 普通卡）也必须随包自检。
+    #     教训：`out/t2_card_bank.npz` 漏打包 → `load_bank` 去"静默重建"（要吃 frames/ 抽帧缓存，
+    #     exe 里没有）→ 抛异常 → 被 read_actor 的兜底吞掉 → **盲盒整块功能静默失效**
+    #     （用户实机报过两次"盲盒不记录"）。这里用三张随包发的真值小块走**生产同一个入口**。
+    #     ⚠️ 用 PIL 读图：exe 路径含中文，`cv2.imread` 在 Windows 上读不了非 ASCII 路径。
+    t2_ok = True
+    try:
+        from PIL import Image as _Image2
+        import axis_actor_team2 as _E2
+        from tools.team2 import card_kind_t2 as _CK
+        for _tag, _png, _want in (("盲盒", "t2_blindbox_t86.png", "blindbox"),
+                                  ("红兔", "t2_enemybuff_t137.png", "enemy_buff"),
+                                  ("普通卡", "t2_unit_t85.png", None)):
+            _fp = R.resource("out/real_frames/" + _png)
+            if not os.path.exists(_fp):
+                print("    ⚠️ 缺 T2 自检素材 %s → **跳过**该帧" % _png)
+                continue
+            _bgr = np.ascontiguousarray(np.asarray(_Image2.open(_fp).convert("RGB"))[:, :, ::-1])
+            _k = _CK.card_kind_live(_E2.as_full(_bgr))
+            _good = (_k["kind"] == _want) if _want else (_k["kind"] != "blindbox")
+            t2_ok = t2_ok and _good
+            _owner = ("→ %s" % _k["owner"]) if _k.get("owner") else ""
+            print("    %s T2 %-4s %-24s kind=%-10s score=%.3f %s"
+                  % ("✓" if _good else "✗", _tag, _png, str(_k["kind"]), _k["score"], _owner))
+    except Exception as e:                               # noqa: BLE001
+        t2_ok = False
+        print("    ✗ T2 顶端卡判定异常（模板库没进包时会这样）：%r" % (e,))
+
     print("\n=== 事件引擎（C 线判据，口径不许漂移）===")
     from mvp import engine as E
     E._selftest()
@@ -934,9 +962,9 @@ def selftest():
         print("  ⚠️ 建窗失败：%r" % (e,))
         print("  → 这一项**没有验证**（多半是没有桌面会话）；实机双击时再看")
 
-    print("\n自检%s" % ("通过 ✓" if (not miss and ov_ok is not False and p1_ok and px_ok)
+    print("\n自检%s" % ("通过 ✓" if (not miss and ov_ok is not False and p1_ok and px_ok and t2_ok)
                       else "**未通过**"))
-    return 1 if (miss or ov_ok is False or not p1_ok or not px_ok) else 0
+    return 1 if (miss or ov_ok is False or not p1_ok or not px_ok or not t2_ok) else 0
 
 
 def _selftest_p1(perc=None):

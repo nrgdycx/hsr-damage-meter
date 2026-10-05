@@ -31,6 +31,12 @@ MUST = [
     ("行动轴模板库（录屏2）",  "out/axis_top_bank_E2.npz"),
     ("左侧标记模板库",        "out/axis_marker_bank_E.npz"),
     ("阿哈认脸模板库",        "out/t2_aha_bank.npz"),
+    # ⭐⭐ 2026-10-05 二轮：T2 判定的数据文件。这几条以前**一条都没在清单里** ——
+    #    于是"盲盒模板库没进 exe"这种漏项 preflight 抓不到（用户报过两次盲盒不记录）。
+    ("阿哈认脸标签",          "out/t2_aha_labels.json"),
+    ("阿哈时刻时间线",        "out/t2_aha_timeline.json"),
+    ("盲盒/红兔卡面模板库",    "out/t2_card_bank.npz"),
+    ("忆灵归属覆盖表",        "out/teams/owners.json"),
     ("事件表权威输入",        "out/frames_dense4.csv"),
     ("1fps 基线输入",         "out/frames_C.csv"),
     ("归属汇总基线",          "out/owner_summary_C.csv"),
@@ -47,6 +53,10 @@ EXE_MUST = [
     "_internal/out/digit_cnn_yinlang999.onnx",
     "_internal/out/axis_top_bank_E.npz",
     "_internal/out/t2_aha_bank.npz",
+    # ⭐ 2026-10-05 二轮：这三样缺了就是"盲盒/阿哈/忆灵归属静默失效"，必须进 exe 核对
+    "_internal/out/t2_card_bank.npz",
+    "_internal/out/teams/owners.json",
+    "_internal/out/digit_cnn_yinlang999.probe.npz",
     "_internal/tools/team2/card_kind_t2.py",
     "_internal/tools/team2/aha_member.py",
 ]

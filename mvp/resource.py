@@ -40,6 +40,15 @@ RESOURCES = (
     "out/digit_cnn_yinlang999.onnx",
     "out/digit_cnn_yinlang999.onnx.data",
     "out/digit_cnn_yinlang999.probe.npz",
+    # ⭐⭐ 2026-10-05 二轮：**T2 判定的数据文件**。漏任何一个都会**静默失效**：
+    #    `t2_card_bank.npz` → 盲盒/红兔认不出（盲盒伤害不记录，用户实机报过两次）；
+    #    `t2_aha_*`       → 阿哈时刻判不出"框里是谁"；
+    #    `teams/owners.json` → 忆灵归属覆盖丢失，召唤物记成自己的名字。
+    "out/t2_card_bank.npz",
+    "out/t2_aha_bank.npz",
+    "out/t2_aha_labels.json",
+    "out/t2_aha_timeline.json",
+    "out/teams/owners.json",
     "out/axis_top_bank_E.npz",      # 行动轴单位模板库（录屏1 的 8 个单位）
     "out/axis_top_bank_E2.npz",     # 行动轴单位模板库（录屏2 的 4 个单位）
     "out/axis_marker_bank_E.npz",   # 左侧标记模板库（判敌我 / 行动类型）
@@ -52,6 +61,11 @@ RESOURCES = (
     #    这一路连坏过三轮（喂错区域 / 蓝云穿掩膜 / 几何闸误杀），"能加载模型"完全看不出来。
     "out/real_frames/pixel_t100_506286.png",
     "out/real_frames/pixel_t200_2052321.png",
+    # ⭐ 2026-10-05：T2 顶端卡种类的三张真值小块（盲盒 / 红兔 / 普通卡）→
+    #    exe 自检能断言"盲盒认得出、红兔判成敌方 buff、普通卡不误判"。
+    "out/real_frames/t2_blindbox_t86.png",
+    "out/real_frames/t2_enemybuff_t137.png",
+    "out/real_frames/t2_unit_t85.png",
 )
 
 _CACHE = {}

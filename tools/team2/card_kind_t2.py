@@ -53,7 +53,8 @@ KIND_NOTE = {"blindbox": "【头号补给盲盒】= 银狼LV.999 的召唤物（
              "enemy_buff": "敌方给我方的 buff 卡 → 不计入我方伤害"}
 
 
-def build_bank(out_path=BANK_PATH, verbose=True):
+def build_bank(out_path=None, verbose=True):
+    out_path = BANK_PATH if out_path is None else out_path
     bank = {}
     for name, frames in (("blindbox", BLINDBOX_FRAMES), ("enemy_buff", RABBIT_FRAMES)):
         mats = []
@@ -72,14 +73,33 @@ def build_bank(out_path=BANK_PATH, verbose=True):
 _CACHE = {}
 
 
-def load_bank(path=BANK_PATH):
+def load_bank(path=None):
+    """读模板库（`out/t2_card_bank.npz`）。
+
+    ⚠️⚠️ 2026-10-05 修：**不再"文件不在就静默重建"**。
+    原因（用户实机："盲盒还是没记进去"）：模板库当时**没打进 exe**，
+    而这里的兜底会去 `build_bank()` → 它要读 `frames/axis2_L2/*_top.png`
+    —— 那是**开发期的抽帧缓存，exe 里没有** → 抛 FileNotFoundError →
+    这个异常被 `mvp/reader.read_actor` 的"别崩掉循环"兜底吞掉 →
+    **盲盒整块功能静默失效**（没有任何报错，只是盲盒永远认不出、伤害不记录）。
+    在**仓库里**却一直看不出来：抽帧缓存在，于是它每次都**悄悄重建**了这个库。
+
+    ⇒ 现在：文件不在就**报错**（并给出可操作指令）。要重建请显式跑 `--build`。
+    （`path=None` 而不是把 `BANK_PATH` 写成默认参数 —— 默认值是**定义时**绑定的，
+    运行期改模块变量不生效，排查时会被这个假象骗到。）
+    """
+    path = BANK_PATH if path is None else path
     if path in _CACHE:
         return _CACHE[path]
     if not os.path.isfile(path):
-        bank = build_bank(path, verbose=False)
-    else:
-        z = np.load(path)
-        bank = {k: z[k] for k in z.files}
+        raise RuntimeError(
+            "缺模板库 %s → 实时链路认不出「头号补给盲盒」，盲盒伤害不会被记录。\n"
+            "  ① 重建（需要 frames/axis2_L2 抽帧缓存）："
+            "python -u tools/team2/card_kind_t2.py --build\n"
+            "  ② 确认它进了打包清单：hud_pack.spec 的 DATAS_REL + mvp/resource.py 的 RESOURCES"
+            % path)
+    z = np.load(path)
+    bank = {k: z[k] for k in z.files}
     _CACHE[path] = bank
     return bank
 

@@ -59,11 +59,27 @@ DATAS_REL = [
     "out/t2_aha_bank.npz",
     "out/t2_aha_labels.json",
     "out/t2_aha_timeline.json",
+    # ⚠️⚠️ 2026-10-05 补第二轮：**盲盒 / 红兔的卡面模板库**。
+    #    上一轮只补了 `tools/team2/` 与 `t2_aha_bank.npz`，**漏了这个 npz** ——
+    #    而 `card_kind_t2.load_bank()` 当时"文件不在就静默重建"（要吃 frames/ 抽帧缓存，
+    #    exe 里没有）→ 抛异常 → 被 `read_actor` 的兜底吞掉
+    #    → **盲盒整块功能静默失效**（用户 2026-10-05 实机："盲盒还是没记进去"）。
+    "out/t2_card_bank.npz",
+    # ⚠️ 2026-10-05 补：忆灵/召唤物 → 召唤者的覆盖表（`axis_actor._load_owner_overrides`）。
+    #    它有 11 条（神君→景元、账账→托帕、迷迷→记忆主、龙灵→丹恒•腾荒 …），
+    #    而代码里只硬编码了队伍1 的 4 条；**缺这个文件会静默退回**，
+    #    于是那些召唤物的伤害记成它们自己的名字（实测过：拓星者被记成"拓星者"）。
+    "out/teams/owners.json",
     # P1：实机帧 —— 让 exe 的 `--selftest` 能做**真实一帧的端到端读数断言**
     "out/real_frames/live_2880x1800_73431_q88.jpg",
     # ⭐ 2026-10-05：像素体（狼尊强普）两张真值 HUD 区域 → exe 自检对像素体读数做端到端断言
     "out/real_frames/pixel_t100_506286.png",
     "out/real_frames/pixel_t200_2052321.png",
+    # ⭐ 2026-10-05：T2 顶端卡种类（盲盒 / 红兔 / 普通卡）顶端卡小块 → exe 自检能断言
+    #    "盲盒认得出、红兔判成敌方 buff、普通卡不误判" —— 就是被漏掉那个 npz 的哨兵。
+    "out/real_frames/t2_blindbox_t86.png",
+    "out/real_frames/t2_enemybuff_t137.png",
+    "out/real_frames/t2_unit_t85.png",
 ]
 
 # ── 运行时要 import 的**包目录**（PyInstaller 的静态分析看不到函数体内的 import）──
