@@ -132,8 +132,11 @@ class ScreenSource:
 
     CALIB = os.path.join("out", "live_calib.json")     # 相对 RUNTIME_DIR（源码=仓库根，exe=exe 目录）
 
-    def __init__(self, axis_every=5, calibrate=False, verbose=True, use_calib=True,
+    def __init__(self, axis_every=1, calibrate=False, verbose=True, use_calib=True,
                  dump_frames=None, dump_frames_every=3.0):
+        # ⚠️ `axis_every` 默认 1（每帧都读轴）—— 见 `run()` 里的说明：
+        #    盲盒那类顶端卡动画很短，抽样读会整帧错过它，导致归属算到别人头上。
+        #    实测每帧读 = 18.4ms/帧（读轴那 14.4ms 是主要成本），仍在预算内。
         from capture import Grabber
         from mvp.reader import axis_region_for, hud_region_for, pixel_region_for
         self.g = Grabber()
@@ -608,7 +611,14 @@ def run(a):
               % (a.replay, len(src), a.range[0], a.range[1], a.step or "全部", a.hud_mode,
                  axis_every))
     else:
-        src = ScreenSource(axis_every=(5 if a.axis_every is None else a.axis_every),
+        # ⚠️⚠️ 2026-10-05（用户：「**我开局的盲盒咋算到爻光身上，盲盒动画更短**」）：
+        #    **行动轴改成每帧都读**（原来 `axis_every=5`，约 6Hz）。
+        #    为什么：盲盒的顶端卡动画很短，6Hz 采样会**整帧错过**那张卡 →
+        #    T2 判不出 blindbox → 这一击就按"轴上前一个人"归属（实测被算到爻光头上）。
+        #    实测成本：读一遍轴（含 T2 卡面细化）14.4ms；不读轴 3.9ms/帧
+        #    → 每帧读 = 18.4ms/帧，仍远在 100ms 预算内（`axis_every=5` 时 6.8ms）。
+        #    要省时间可以自己调 `--axis-every`（但会重新引入"错过短卡"的风险）。
+        src = ScreenSource(axis_every=(1 if a.axis_every is None else a.axis_every),
                            calibrate=a.calibrate, use_calib=not getattr(a, "no_calib", False),
                            dump_frames=getattr(a, "dump_frames", None),
                            dump_frames_every=getattr(a, "dump_frames_every", 3.0))

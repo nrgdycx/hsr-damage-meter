@@ -275,35 +275,36 @@ class LiveEngine:
                 return
             da = int(a.get("damage_max") or 0)
             db = int(b.get("damage_max") or 0)
-            db_first = int(b.get("damage_first") or 0)
             if da < self.MERGE_FLOOR or db < self.MERGE_FLOOR:
                 return
             # 必须"还在涨"（跌了 = 新一击，累计值归零）
             if db < da:
                 return
-            # 后段必须是"接着前段的数继续涨"，不是"从小数字重新开始"
-            if db_first < da * self.MERGE_MIN_RATIO:
-                return
             ta = float(a.get("t_last") or a.get("t_anchor") or 0.0)
             tb = float(b.get("t_first") or b.get("t_anchor") or 0.0)
+            te_b = float(b.get("t_last") or b.get("t_anchor") or tb)
             if tb - ta > self.MERGE_GAP:
                 return
-            # ⚠️ 还要确认"中间**没有归零过**"：同一次攻击的累计值只会涨，
-            #    只有真正重新开始（新一击 / 清场后重新施放）才会先掉回去。
-            #    ⚠️ 这里**故意不经过 `E4.value()`** —— 它会把"被剔除"的读数算成 None，
-            #       而小读数恰好常被 R1b「量级碎片」规则**误剔**（实测：5万 → 1万→30万 那次
-            #       1万被剔 → 只看 damage_first 会误判成"接着涨" → 把前一次真攻击吞掉）。
-            #       这里只把"是个像样的数字（≥ MERGE_FLOOR）且明显低于前段峰值"当作
-            #       **归零证据** —— 不用它计数，所以误剔也不影响正确性。
+            # 后段必须是"接着前段的数继续涨"，不是"从小数字重新开始"。
+            # ⚠️⚠️ 2026-10-05 三轮（用户："**重复计数的问题更严重了**"）：
+            #    二轮我在这里加过一条"扫 a→b 之间有没有小读数 → 有就不并"的归零检测，
+            #    那条**扫得太宽**：真实强普的两段之间本来就常夹着小数字（盲盒自己的
+            #    欢愉伤害、碎片读数），于是它把**本该合并的分段全挡回去** → 重复计数更严重。
+            #    现在改成只看**后段自己的第一条原始读数**（不看 reject：小读数常被 R1b
+            #    「量级碎片」误剔），既保住了"两次真攻击不许并"，又不再误挡分段累加。
+            b_first = None
             for r in self.rows:
-                if not (ta < r["t"] <= tb) or r.get("grade") != "raw":
+                if not (tb - 1e-9 <= r["t"] <= te_b + 1e-9) or r.get("grade") != "raw":
                     continue
                 try:
                     v = int(r.get("text") or 0)
                 except (TypeError, ValueError):
                     continue
-                if self.MERGE_FLOOR <= v < da * 0.5:
-                    return                     # 归零过 → 那是新一击，不许并
+                if v:
+                    b_first = v
+                    break
+            if b_first is not None and b_first < da * self.MERGE_MIN_RATIO:
+                return                       # 后段是从小数重新涨起来的 → 那是新一击
         except Exception:                                # noqa: BLE001
             return
         # 合并：保留 b（更大的那个值），a 标掉并移除
